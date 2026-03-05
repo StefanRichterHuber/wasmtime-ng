@@ -1,0 +1,6 @@
+{
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "rust-analyzer.linkedProjects": [
+        "./src/main/rust/wasmtime-binding/Cargo.toml"
+    ]
+}
