@@ -1,3 +1,5 @@
+[![Java CI with Maven](https://github.com/StefanRichterHuber/wasmtime-ng/actions/workflows/maven.yml/badge.svg?branch=main)](https://github.com/StefanRichterHuber/wasmtime-ng/actions/workflows/maven.yml)
+
 # Wasmtime-java-ng
 
 > **Disclaimer:** This project is an independent community effort and is not affiliated with, maintained, or endorsed by the original [Wasmtime project](https://github.com/bytecodealliance/wasmtime) or the Bytecode Alliance.
@@ -173,6 +175,12 @@ try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix())) {
     * `withSocket(java.net.Socket)`: Pre-opens a client socket.
     * `withServerSocket(java.net.ServerSocket)`: Pre-opens a listening socket.
     * `withSocketFactory(WasiSocketFactory)`: Customizable socket creation (e.g., proxies, virtual networks).
+
+### WASI threads
+
+There is some preliminary support for WASI threads
+
+
 
 ## Architecture
 
