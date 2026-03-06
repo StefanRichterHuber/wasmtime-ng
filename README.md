@@ -1,4 +1,4 @@
-[![Java CI with Maven](https://github.com/StefanRichterHuber/wasmtime-ng/actions/workflows/maven.yml/badge.svg?branch=main)](https://github.com/StefanRichterHuber/wasmtime-ng/actions/workflows/maven.yml)
+[![CI](https://github.com/StefanRichterHuber/wasmtime-ng/actions/workflows/maven.yml/badge.svg?branch=main)](https://github.com/StefanRichterHuber/wasmtime-ng/actions/workflows/maven.yml)
 
 # Wasmtime-java-ng
 
