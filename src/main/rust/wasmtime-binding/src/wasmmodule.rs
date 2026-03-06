@@ -1,10 +1,11 @@
-use crate::wasmengine::EngineHandle;
+use crate::{wasmengine::EngineHandle, wasminstance::handle_wasmtime_error};
 use jni::{bind_java_type, sys::jlong};
+use log::debug;
 use wasmtime::Module;
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-struct ModuleHandle(*const Module);
+pub struct ModuleHandle(*const Module);
 
 #[allow(dead_code)]
 impl ModuleHandle {
@@ -55,7 +56,7 @@ impl JWasmtimeModuleNativeInterface for JWasmtimeModuleAPI {
         _this: JWasmtimeModule<'local>,
         module: ModuleHandle,
     ) -> ::std::result::Result<(), Self::Error> {
-        println!("Module closed");
+        debug!("Module closed");
         drop(unsafe { module.into_box() });
         Ok(())
     }
@@ -72,10 +73,15 @@ impl JWasmtimeModuleNativeInterface for JWasmtimeModuleAPI {
         let script: &mut [u8] = unsafe { core::slice::from_raw_parts_mut(address, size) };
 
         // TODO convert wasmtime error to jni error
-        let module = Module::new(unsafe { engine.as_ref() }, script).unwrap();
-        let result = ModuleHandle::new(module);
+        let module = match Module::new(unsafe { engine.as_ref() }, script) {
+            Ok(module) => ModuleHandle::new(module).into(),
+            Err(e) => {
+                handle_wasmtime_error(env, e)?;
+                0
+            }
+        };
 
-        println!("Created module from source buffer");
-        Ok(result.into())
+        debug!("Created module from source buffer");
+        Ok(module)
     }
 }

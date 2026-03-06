@@ -12,6 +12,11 @@ import java.nio.charset.StandardCharsets;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+/**
+ * Represents a compiled WebAssembly module.
+ * A module is compiled from WebAssembly binary format or text format (WAT).
+ * Once compiled, it can be instantiated multiple times.
+ */
 public final class WasmtimeModule implements AutoCloseable {
 
     private static final Logger LOGGER = LogManager.getLogger();
@@ -25,14 +30,19 @@ public final class WasmtimeModule implements AutoCloseable {
     private native void closeModule(long modulePtr);
 
     /**
-     * Defines a WASM Module
+     * Compiles a WebAssembly module from a binary buffer.
      * 
-     * @param engine Engine to use
-     * @param source ByteBuffer containing the source. If the ByteBuffer is direct,
-     *               it can be directly passed to the native context without
-     *               copying!
+     * @param engine Engine to use for compilation.
+     * @param source ByteBuffer containing the WASM binary. If the ByteBuffer is
+     *               direct, it can be passed to the native context without copying.
      */
     public WasmtimeModule(WasmtimeEngine engine, ByteBuffer source) {
+        if (engine == null) {
+            throw new NullPointerException("WasmtimeEngine must not be null");
+        }
+        if (source == null) {
+            throw new NullPointerException("Source ByteBuffer must not be null");
+        }
         if (!source.isDirect()) {
             LOGGER.info(
                     "Only direct ByteBuffers could be directly move to the runtime, all others have to be copied in to a direct ByteBuffer");
@@ -47,21 +57,41 @@ public final class WasmtimeModule implements AutoCloseable {
     }
 
     /**
+     * Compiles a WebAssembly module from an byte array.
      * 
+     * @param engine Engine to use for compilation.
+     * @param source byte array containing the WASM binary.
+     */
+    public WasmtimeModule(WasmtimeEngine engine, byte[] source) {
+        this(engine, createByteBuffer(source));
+    }
+
+    /**
+     * Compiles a WebAssembly module from an InputStream.
+     * 
+     * @param engine Engine to use for compilation.
+     * @param is     InputStream containing the WASM binary or WAT text.
+     * @throws IOException If reading from the stream fails.
      */
     public WasmtimeModule(WasmtimeEngine engine, InputStream is) throws IOException {
         this(engine, createByteBuffer(is));
     }
 
+    /**
+     * Compiles a WebAssembly module from a WAT string.
+     * 
+     * @param engine Engine to use for compilation.
+     * @param wat    The WAT source string.
+     */
     public WasmtimeModule(WasmtimeEngine engine, String wat) {
         this(engine, createByteBuffer(wat));
     }
 
     /**
-     * Utility function to copy a string into a direct ByteBuffer
+     * Utility function to copy a string into a direct ByteBuffer.
      * 
-     * @param src String to copy
-     * @return Created ByteBuffer
+     * @param src String to copy.
+     * @return Created ByteBuffer.
      */
     private static ByteBuffer createByteBuffer(String src) {
         byte[] srcBytes = src.getBytes(StandardCharsets.UTF_8);
@@ -72,11 +102,24 @@ public final class WasmtimeModule implements AutoCloseable {
     }
 
     /**
-     * Creates a direct ByteBuffer from the given InputStream
+     * Utility function to copy a string into a direct ByteBuffer.
      * 
-     * @param src Src InputStream
-     * @return
-     * @throws IOException
+     * @param src byte array to copy
+     * @return Created ByteBuffer.
+     */
+    private static ByteBuffer createByteBuffer(byte[] src) {
+        ByteBuffer buf = ByteBuffer.allocateDirect(src.length);
+        buf.put(src);
+        buf.flip();
+        return buf;
+    }
+
+    /**
+     * Creates a direct ByteBuffer from the given InputStream.
+     * 
+     * @param src Src InputStream.
+     * @return A direct ByteBuffer containing the data from the stream.
+     * @throws IOException If reading from the stream fails.
      */
     private static ByteBuffer createByteBuffer(InputStream src) throws IOException {
         if (src == null) {
@@ -118,10 +161,18 @@ public final class WasmtimeModule implements AutoCloseable {
         }
     }
 
+    /**
+     * Returns the native pointer to the module.
+     * 
+     * @return The native module pointer.
+     */
     long getModulePtr() {
         return this.modulePtr;
     }
 
+    /**
+     * Closes the module and releases native resources.
+     */
     @Override
     public void close() throws Exception {
         if (modulePtr != 0) {

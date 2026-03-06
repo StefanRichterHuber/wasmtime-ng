@@ -2,15 +2,19 @@ package io.github.stefanrichterhuber.wasmtimejavang;
 
 import io.questdb.jar.jni.JarJniLoader;
 
-import java.nio.ByteBuffer;
-
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+/**
+ * Represents a Wasmtime engine.
+ * The engine is a global context for WebAssembly compilation and execution.
+ * It handles the loading of the native Wasmtime binding and coordinates
+ * logging between the native code and Java.
+ */
 public final class WasmtimeEngine implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getLogger();
-    private static final Logger NATIVE_LOGGER = LogManager.getLogger("[QuickJS native library]");
+    private static final Logger NATIVE_LOGGER = LogManager.getLogger("[Wasmtime native library]");
 
     /**
      * Initializes the logging for the native library. Only allowed to be called
@@ -18,9 +22,7 @@ public final class WasmtimeEngine implements AutoCloseable {
      * 
      * @param level Log level from 0 (off) to 5 (trace)
      */
-    private static void initLogging(int level) {
-        // TODO: change to native
-    }
+    private static native void initLogging(int level);
 
     // Loads the native library and initializes logging
     static {
@@ -60,28 +62,16 @@ public final class WasmtimeEngine implements AutoCloseable {
      * @param message Message to log
      */
     static void runtimeLog(int level, String message) {
-        switch (level) {
-            case 0:
-                // DO nothing -> log is off
-                break;
-            case 5:
-                NATIVE_LOGGER.trace(message);
-                break;
-            case 4:
-                NATIVE_LOGGER.debug(message);
-                break;
-            case 3:
-                NATIVE_LOGGER.info(message);
-                break;
-            case 2:
-                NATIVE_LOGGER.warn(message);
-                break;
-            case 1:
-                NATIVE_LOGGER.error(message);
-                break;
-            default:
-                NATIVE_LOGGER.error(message);
-        }
+        final Level logLevel = switch (level) {
+            case 5 -> Level.TRACE;
+            case 4 -> Level.DEBUG;
+            case 3 -> Level.INFO;
+            case 2 -> Level.WARN;
+            case 1 -> Level.ERROR;
+            case 0 -> Level.FATAL;
+            default -> null;
+        };
+        NATIVE_LOGGER.log(logLevel, message);
     }
 
     private long enginePtr;
@@ -90,14 +80,25 @@ public final class WasmtimeEngine implements AutoCloseable {
 
     private native void closeEngine(long enginePtr);
 
+    /**
+     * Creates a new WasmtimeEngine.
+     */
     public WasmtimeEngine() {
         this.enginePtr = createEngine();
     }
 
+    /**
+     * Returns the native pointer to the engine.
+     * 
+     * @return The native engine pointer.
+     */
     long getEnginePtr() {
         return this.enginePtr;
     }
 
+    /**
+     * Closes the engine and releases native resources.
+     */
     @Override
     public void close() throws Exception {
         if (enginePtr != 0) {
@@ -105,13 +106,4 @@ public final class WasmtimeEngine implements AutoCloseable {
         }
         enginePtr = 0;
     }
-
-    public WasmtimeModule createModule(ByteBuffer src) {
-        return new WasmtimeModule(this, src);
-    }
-
-    public WasmtimeModule createModule(String src) {
-        return new WasmtimeModule(this, src);
-    }
-
 }

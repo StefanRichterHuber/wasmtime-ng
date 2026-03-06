@@ -1,7 +1,8 @@
 [package]
-name = "wasmtime-binding"
+name = "wasip1test"
 version = "0.1.0"
 edition = "2024"
+
 
 [profile.release]
 opt-level = 's'     # Optimize for size
@@ -9,15 +10,6 @@ lto = true          # Enable Link Time Optimization
 codegen-units = 1   # Allow LLVM to optimize more aggressively across the whole crate
 panic = 'abort'     # Removes stack unwinding code (saves a lot of space)
 
-[lib]
-name = "wasmtimebinding"
-crate-type = ["cdylib"]
-
 [dependencies]
-wasmtime = { version = "42.0.1" }
-jni = { version = "0.22" }
-log = { version = "0.4", features = ["std"] }
+wasi = "0.11"
 
-[dev-dependencies]
-# Invocation feature is necessary for tests to spin up a VM
-jni = { version = "0.22", features = ["invocation"] }

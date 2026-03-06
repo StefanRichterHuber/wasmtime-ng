@@ -5,6 +5,11 @@ import java.util.List;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+/**
+ * Used to resolve imports for a WebAssembly module.
+ * The linker allows providing Java-implemented functions or WASI contexts
+ * to a WASM module during instantiation.
+ */
 public final class WasmtimeLinker implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getLogger();
     private long linkerPtr;
@@ -17,10 +22,14 @@ public final class WasmtimeLinker implements AutoCloseable {
 
     private native void closeLinker(long linkerPtr);
 
-    private native void defineFunction(long enginePtr, long storePtr, WasmFunction func, String name,
+    private native void defineFunction(long enginePtr, long storePtr, long linkerPtr, WasmtimeFunction func,
+            String module, String name,
             List<ValType> params,
             List<ValType> returnTypes);
 
+    /**
+     * Closes the linker and releases native resources.
+     */
     @Override
     public void close() throws Exception {
         if (linkerPtr != 0) {
@@ -29,17 +38,57 @@ public final class WasmtimeLinker implements AutoCloseable {
         linkerPtr = 0;
     }
 
+    /**
+     * Returns the native pointer to the linker.
+     * 
+     * @return The native linker pointer.
+     */
     long getLinkerPtr() {
         return this.linkerPtr;
     }
 
+    /**
+     * Creates a new WasmtimeLinker.
+     * 
+     * @param engine The engine associated with this linker.
+     * @param store  The store associated with this linker.
+     */
     public WasmtimeLinker(WasmtimeEngine engine, WasmtimeStore store) {
+        if (engine == null) {
+            throw new NullPointerException("WasmtimeEngine must not be null");
+        }
+        if (store == null) {
+            throw new NullPointerException("WasmtimeStore must not be null");
+        }
         this.engine = engine;
         this.store = store;
         this.linkerPtr = createLinker(engine.getEnginePtr());
     }
 
-    public void importFunction(String name, List<ValType> parameters, List<ValType> returnTypes, WasmFunction f) {
-        defineFunction(this.engine.getEnginePtr(), this.store.getStorePtr(), f, name, parameters, returnTypes);
+    /**
+     * Links all import functions from a WasmContext.
+     * 
+     * @param context The context providing imports (e.g., a WASI context).
+     */
+    public void link(WasmContext context) {
+        for (WasmContext.ImportFunction importFunction : context.getImportFunctions()) {
+            importFunction(importFunction.module(), importFunction.name(), importFunction.parameters(),
+                    importFunction.returnTypes(), importFunction.function());
+        }
+    }
+
+    /**
+     * Explicitly imports a Java function into the WASM module.
+     * 
+     * @param module     The name of the module providing the import.
+     * @param name       The name of the imported function.
+     * @param parameters The parameter types of the function.
+     * @param returnTypes The return types of the function.
+     * @param f          The Java function implementation.
+     */
+    public void importFunction(String module, String name, List<ValType> parameters, List<ValType> returnTypes,
+            WasmtimeFunction f) {
+        defineFunction(this.engine.getEnginePtr(), this.store.getStorePtr(), getLinkerPtr(), f, module, name,
+                parameters, returnTypes);
     }
 }

@@ -1,19 +1,36 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class WasmtimeStore implements AutoCloseable {
+/**
+ * Represents a Wasmtime store.
+ * A store is a container for all WebAssembly state, including instances,
+ * memories, and globals.
+ * It also maintains a context map that is passed to Java-implemented functions.
+ */
+public final class WasmtimeStore implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getLogger();
 
     private long storePtr;
 
     private final WasmtimeEngine engine;
 
-    private native long createStore(long enginePtr);
+    private native long createStore(long enginePtr, Map<String, Object> context);
 
     private native void closeStore(long storePtr);
 
+    /**
+     * Global context. Thread-safe
+     */
+    private final Map<String, Object> context = new ConcurrentHashMap<>();
+
+    /**
+     * Closes the store and releases native resources.
+     */
     @Override
     public void close() throws Exception {
         if (storePtr != 0) {
@@ -22,12 +39,35 @@ public class WasmtimeStore implements AutoCloseable {
         storePtr = 0;
     }
 
+    /**
+     * Returns the native pointer to the store.
+     * 
+     * @return The native store pointer.
+     */
     long getStorePtr() {
         return this.storePtr;
     }
 
+    /**
+     * Creates a new WasmtimeStore.
+     * 
+     * @param engine The engine associated with this store.
+     */
     public WasmtimeStore(WasmtimeEngine engine) {
+        if (engine == null) {
+            throw new NullPointerException("WasmtimeEngine must not be null");
+        }
         this.engine = engine;
-        this.storePtr = createStore(engine.getEnginePtr());
+        this.storePtr = createStore(engine.getEnginePtr(), this.context);
+    }
+
+    /**
+     * Returns the context map associated with this store.
+     * This map is passed to all Java functions called from WASM.
+     * 
+     * @return The mutable context map.
+     */
+    public Map<String, Object> getContext() {
+        return this.context;
     }
 }

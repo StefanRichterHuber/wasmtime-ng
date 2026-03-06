@@ -1,4 +1,5 @@
 use jni::{bind_java_type, sys::jlong};
+use log::debug;
 use wasmtime::Engine;
 
 #[repr(transparent)]
@@ -40,7 +41,8 @@ bind_java_type! {
 
     native_methods {
         extern fn close_engine(handle: EngineHandle),
-        extern fn create_engine() -> jlong
+        extern fn create_engine() -> jlong,
+        extern static fn init_logging(level: jint)
     },
 }
 
@@ -52,7 +54,7 @@ impl JWasmtimeEngineNativeInterface for JWasmtimeEngineAPI {
         _this: JWasmtimeEngine<'local>,
         handle: EngineHandle,
     ) -> ::std::result::Result<(), Self::Error> {
-        println!("Engine closed");
+        debug!("Engine closed");
         drop(unsafe { handle.into_box() });
         Ok(())
     }
@@ -61,9 +63,17 @@ impl JWasmtimeEngineNativeInterface for JWasmtimeEngineAPI {
         _env: &mut ::jni::Env<'local>,
         _this: JWasmtimeEngine<'local>,
     ) -> ::std::result::Result<::jni::sys::jlong, Self::Error> {
-        println!("Engine created");
+        debug!("Engine created");
         let engine = Engine::default();
         let result = EngineHandle::new(engine);
         return Ok(result.into());
+    }
+
+    fn init_logging<'local>(
+        env: &mut ::jni::Env<'local>,
+        _class: ::jni::objects::JClass<'local>,
+        level: ::jni::sys::jint,
+    ) -> ::std::result::Result<(), Self::Error> {
+        crate::logging::init_logging(env, level)
     }
 }

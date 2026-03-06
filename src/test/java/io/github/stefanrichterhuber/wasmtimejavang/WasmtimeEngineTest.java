@@ -1,30 +1,62 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import java.io.ByteArrayInputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.Test;
 
 public class WasmtimeEngineTest {
-
-    @Test
-    public void testCreateEngine() throws Exception {
-        try (WasmtimeEngine engine = new WasmtimeEngine()) {
-            System.out.println(engine);
-        }
-    }
+    private static final Logger LOGGER = LogManager.getLogger();
 
     String wat = """
                     (module
-              (func $hello (import "" "hello"))
+              (func $hello (import "env" "hello"))
               (func (export "run") (call $hello))
             )
 
                     """;
 
     @Test
+    public void testCreateEngine() throws Exception {
+        try (WasmtimeEngine engine = new WasmtimeEngine()) {
+        }
+    }
+
+    @Test
     public void testCreateModule() throws Exception {
+        // Wasm module can be created from (WAT) string
         try (WasmtimeEngine engine = new WasmtimeEngine(); WasmtimeModule module = new WasmtimeModule(engine, wat)) {
-            System.out.println(engine);
+        }
+
+        // Wasm module can be created from direct ByteBuffer. Direct byte buffers can
+        // be directly accessed in the wasm context -> more efficent
+        byte[] watSrc = wat.getBytes(StandardCharsets.UTF_8);
+        ByteBuffer b1 = ByteBuffer.allocateDirect(watSrc.length);
+        b1.put(watSrc);
+        b1.flip();
+        try (WasmtimeEngine engine = new WasmtimeEngine(); WasmtimeModule module = new WasmtimeModule(engine, b1)) {
+        }
+
+        // Wasm module can be created from ByteBuffer. Content will be copied!
+        ByteBuffer b2 = ByteBuffer.allocate(watSrc.length);
+        b2.put(watSrc);
+        b2.flip();
+        try (WasmtimeEngine engine = new WasmtimeEngine(); WasmtimeModule module = new WasmtimeModule(engine, b2)) {
+        }
+
+        // Wasm module can be created from InputStreams. Content will be copied!
+        ByteArrayInputStream bis = new ByteArrayInputStream(watSrc);
+        try (WasmtimeEngine engine = new WasmtimeEngine(); WasmtimeModule module = new WasmtimeModule(engine, bis)) {
+        }
+
+        // Wasm module can be created from ByteArray. Content will be copied!
+        try (WasmtimeEngine engine = new WasmtimeEngine(); WasmtimeModule module = new WasmtimeModule(engine, watSrc)) {
         }
     }
 
@@ -33,7 +65,6 @@ public class WasmtimeEngineTest {
         try (WasmtimeEngine engine = new WasmtimeEngine();
                 WasmtimeModule module = new WasmtimeModule(engine, wat);
                 WasmtimeStore store = new WasmtimeStore(engine)) {
-            System.out.println(engine);
         }
     }
 
@@ -44,10 +75,54 @@ public class WasmtimeEngineTest {
                 WasmtimeStore store = new WasmtimeStore(engine);
                 WasmtimeLinker linker = new WasmtimeLinker(engine, store);) {
 
-            linker.importFunction("hello", List.of(), List.of(), params -> {
+            linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
                 return new long[] { 0 };
             });
-            System.out.println(engine);
+        }
+    }
+
+    @Test
+    public void testCreateInstance() throws Exception {
+        try (
+                WasmtimeEngine engine = new WasmtimeEngine();
+                WasmtimeModule module = new WasmtimeModule(engine, wat);
+                WasmtimeStore store = new WasmtimeStore(engine);
+                WasmtimeLinker linker = new WasmtimeLinker(engine, store);
+
+        ) {
+            // Add a java native function which the wasm runtime can call
+            linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
+                LOGGER.info("Function env::hello called");
+                return new long[] { 0 };
+            });
+
+            // Call the exported function 'run'
+            try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
+            }
+
+        }
+    }
+
+    @Test
+    public void testInvokeFunction() throws Exception {
+        try (
+                WasmtimeEngine engine = new WasmtimeEngine();
+                WasmtimeModule module = new WasmtimeModule(engine, wat);
+                WasmtimeStore store = new WasmtimeStore(engine);
+                WasmtimeLinker linker = new WasmtimeLinker(engine, store);
+
+        ) {
+            store.getContext().put("greeting", "Hello world");
+            linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
+                LOGGER.info("Function env::hello called with greeting: " + context.get("greeting"));
+                return new long[] {};
+            });
+
+            try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
+                List<Object> result = instance.invoke("run", List.of());
+                assertNotNull(result);
+            }
+
         }
     }
 }

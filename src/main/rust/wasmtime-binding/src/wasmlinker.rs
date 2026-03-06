@@ -6,11 +6,12 @@ use jni::{
     refs::Global,
     sys::jlong,
 };
+use log::debug;
 use wasmtime::{Func, FuncType, Linker, Val, ValType};
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-struct LinkerHandle(*mut Linker<Global<JMap<'static>>>);
+pub struct LinkerHandle(*mut Linker<Global<JMap<'static>>>);
 
 #[allow(dead_code)]
 impl LinkerHandle {
@@ -56,7 +57,7 @@ bind_java_type! {
     native_methods {
         extern fn create_linker(engine: EngineHandle) -> jlong,
         extern fn close_linker(linker: LinkerHandle),
-        extern fn define_function(engine: EngineHandle, store:StoreHandle, func: io.github.stefanrichterhuber.wasmtimejavang.WasmFunction, name:JString, parameters: JList, return_types: JList)
+        extern fn define_function(engine: EngineHandle, store:StoreHandle, linker: LinkerHandle, func: io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction, module: JString, name: JString, parameters: JList, return_types: JList)
     }
 }
 
@@ -71,7 +72,7 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         let linker = Linker::new(unsafe { engine.as_ref() });
 
         let result = LinkerHandle::new(linker);
-        println!("Created Linker");
+        debug!("Created Linker");
         Ok(result.into())
     }
 
@@ -80,7 +81,7 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         _this: JWasmtimeLinker<'local>,
         linker: LinkerHandle,
     ) -> ::std::result::Result<(), Self::Error> {
-        println!("Linker closed");
+        debug!("Linker closed");
         drop(unsafe { linker.into_box() });
         Ok(())
     }
@@ -90,13 +91,21 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         _this: JWasmtimeLinker<'local>,
         engine: EngineHandle,
         store: StoreHandle,
+        linker: LinkerHandle,
         func: JObject,
+        module: ::jni::objects::JString<'local>,
         name: ::jni::objects::JString<'local>,
         parameters: ::jni::objects::JList<'local>,
         return_types: ::jni::objects::JList<'local>,
     ) -> ::std::result::Result<(), Self::Error> {
         let params = convert_val_type_enum_list_to_vec(env, parameters)?;
         let results = convert_val_type_enum_list_to_vec(env, return_types)?;
+
+        debug!(
+            "Defining function: {}::{}({:?}) -> {:?}",
+            module, name, params, results
+        );
+        let results_types = results.clone();
         let signature = FuncType::new(unsafe { engine.as_ref() }, params, results);
 
         // Create a global reference to the function
@@ -106,10 +115,22 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         let dynamic_func = Func::new(
             unsafe { store.as_ref() },
             signature,
-            move |_caller, args, returns| {
-                println!("Dynamic call triggered with {} arguments!", args.len());
+            move |caller, args, returns| {
+                debug!("Dynamic call of triggered with {} arguments!", args.len());
                 let result: std::result::Result<Vec<i64>, jni::errors::Error> = jvm
                     .attach_current_thread(|env| {
+                        // We need to the the instance object from the store map
+                        let java_map = caller.data();
+                        let instance_key = JString::from_str(env, "__instance")?;
+                        let instance_obj = env
+                            .call_method(
+                                java_map,
+                                jni_str!("get"),
+                                jni_sig!((java.lang.Object) -> java.lang.Object),
+                                &[JValue::Object(&instance_key)],
+                            )?
+                            .l()?;
+
                         // Convert the args to a JLongArray
                         let args_array = env.new_long_array(args.len())?;
 
@@ -118,17 +139,16 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                             match arg {
                                 Val::I32(v) => args_values.push(*v as jlong),
                                 Val::I64(v) => args_values.push(*v),
-                                _ => println!("  Arg [{:?}]: Other type", arg),
+                                _ => debug!("  Arg [{:?}]: Other type", arg),
                             }
                         }
                         args_array.set_region(env, 0, args_values.as_slice())?;
-
-                        // TODO handle call results
+                        let context_map = caller.data();
                         let call_result = env.call_method(
                             &func,
                             jni_str!("call"),
-                            jni_sig!( ( jlong[]) -> jlong[]),
-                            &[JValue::Object(&args_array)],
+                            jni_sig!( ( io.github.stefanrichterhuber.wasmtimejavang.WasmtimeInstance, java.util.Map, jlong[]) -> jlong[]),
+                            &[JValue::Object(&instance_obj),JValue::Object(context_map), JValue::Object(&args_array)],
                         )?;
 
                         env.exception_catch()?;
@@ -139,7 +159,7 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                         let mut buffer = vec![0i64; result_array_len as usize];
                         result_array.get_region(env, 0, &mut buffer)?;
 
-                        println!("Dynamic call was successfull: {:?}", buffer);
+                        debug!("Dynamic call was successfull: {:?}", buffer);
 
                         Ok(buffer)
                     });
@@ -147,7 +167,15 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                 match result {
                     Ok(values) => {
                         for (i, v) in values.iter().enumerate() {
-                            returns[i] = Val::I64(*v)
+                            if i < returns.len() {
+                                match results_types[i] {
+                                    ValType::I32 => returns[i] = Val::I32(*v as i32),
+                                    ValType::I64 => returns[i] = Val::I64(*v),
+                                    ValType::F32 => returns[i] = Val::F32((*v as f32).to_bits()),
+                                    ValType::F64 => returns[i] = Val::F64((*v as f64).to_bits()),
+                                    _ => returns[i] = Val::I64(*v),
+                                }
+                            }
                         }
                     }
                     Err(_e) => {
@@ -157,13 +185,12 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                 Ok(())
             },
         );
-
         // 3. Add to Linker
-        let mut linker = Linker::new(unsafe { engine.as_ref() });
+        let linker = unsafe { linker.as_ref() };
         linker
             .define(
                 unsafe { store.as_ref() },
-                "env",
+                &module.to_string(),
                 &name.to_string(),
                 dynamic_func,
             )
@@ -218,7 +245,7 @@ fn convert_val_type_enum_list_to_vec<'local>(
         let enum_value_name = JString::cast_local(env, enum_value_name)?;
         let enum_value_name: String = enum_value_name.to_string();
 
-        // Then conver the name of the enum into the corresponding ValType
+        // Then convert the name of the enum into the corresponding ValType
         let value: ValType = match enum_value_name.as_str() {
             "I32" => ValType::I32,
             "I64" => ValType::I64,
