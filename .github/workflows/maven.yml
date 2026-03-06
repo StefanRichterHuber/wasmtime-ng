@@ -26,6 +26,8 @@ jobs:
           java-version: "21"
           distribution: "temurin"
           cache: maven
+      - name: Install additional wasm targets for rust
+        run: rustup target add wasm32-wasip1 && rustup target add wasm32-wasip1-threads
       - name: Install cargo cross
         run: cargo install cross
       - name: Build with Maven
