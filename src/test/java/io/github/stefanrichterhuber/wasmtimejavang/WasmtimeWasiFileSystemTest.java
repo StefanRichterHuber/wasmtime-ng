@@ -21,7 +21,8 @@ public class WasmtimeWasiFileSystemTest {
     public void testFileSystemInteractions() throws Exception {
         String wasmPath = "target/rust-test/wasip1filetest/wasm32-wasip1/debug/wasip1filetest.wasm";
 
-        try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix());
+        try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix().toBuilder()
+                .setAttributeViews("basic", "owner", "posix", "unix").build());
                 FileInputStream fis = new FileInputStream(wasmPath);
                 WasmtimeEngine engine = new WasmtimeEngine();
                 WasmtimeModule module = new WasmtimeModule(engine, fis);
