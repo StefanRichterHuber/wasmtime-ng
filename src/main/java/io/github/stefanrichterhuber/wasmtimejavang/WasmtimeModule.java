@@ -181,4 +181,13 @@ public final class WasmtimeModule implements AutoCloseable {
         modulePtr = 0;
     }
 
+    /**
+     * Returns the WasmtimeEngine associated with this module.
+     * 
+     * @return The WasmtimeEngine instance.
+     */
+    public WasmtimeEngine getEngine() {
+        return this.engine;
+    }
+
 }

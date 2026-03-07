@@ -230,4 +230,21 @@ public class WasmtimeMemory {
         // Invalidate buffer to force refresh on next access
         this.buffer = null;
     }
+
+    /**
+     * 
+     * Returns the WasmtimeInstance this memory belongs to.
+     * @return The WasmtimeInstance associated with this memory.
+     */
+    public WasmtimeInstance getInstance() {
+        return instance;
+    }
+
+    /**
+     * Returns the WasmtimeStore associated with this memory.
+     * @return The WasmtimeStore of this memory.
+     */
+    public WasmtimeStore getStore() {
+        return store;
+    }
 }

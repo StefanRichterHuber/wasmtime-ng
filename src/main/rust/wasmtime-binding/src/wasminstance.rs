@@ -60,7 +60,7 @@ bind_java_type! {
 
     native_methods {
         extern fn create_instance(module: ModuleHandle, store: StoreHandle, linker: LinkerHandle ) -> jlong,
-        extern fn close_instance(instance: InstanceHandle),
+        extern fn close_instance(instance: InstanceHandle, store: StoreHandle,),
         extern fn run_wasm_func(store: StoreHandle, instance: InstanceHandle, name: JString, parameters: JList) -> JList,
     }
 }
@@ -69,12 +69,26 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
     type Error = jni::errors::Error;
 
     fn close_instance<'local>(
-        _env: &mut ::jni::Env<'local>,
+        env: &mut ::jni::Env<'local>,
         _this: JWasmtimeInstance<'local>,
         instance: InstanceHandle,
+          store: StoreHandle,
     ) -> ::std::result::Result<(), Self::Error> {
-        debug!("Instance closed");
+        debug!("Closing Instance");
+        // Remove the instance from the store map
+        let java_map = unsafe { store.as_ref() }.data_mut();
+        let key = JString::from_str(env, "__instance")?;
+
+        // Remove the object reference from the store
+        env.call_method(
+            &java_map,
+            jni_str!("remove"),
+            jni_sig!((java.lang.Object) -> java.lang.Object),
+            &[JValue::Object(&key)],
+        )?;
+
         drop(unsafe { instance.into_box() });
+        debug!("Instance closed successfully");
         Ok(())
     }
 

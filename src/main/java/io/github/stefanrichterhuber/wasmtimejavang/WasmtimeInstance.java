@@ -17,7 +17,7 @@ public final class WasmtimeInstance implements AutoCloseable {
 
     private native long createInstance(long modulePtr, long storePtr, long linkerPtr);
 
-    private native void closeInstance(long linkerPtr);
+    private native void closeInstance(long instancePtr, long storePtr);
 
     private native List<Object> runWasmFunc(long storePtr, long instancePtr, String name, List<Object> params);
 
@@ -42,7 +42,7 @@ public final class WasmtimeInstance implements AutoCloseable {
     @Override
     public void close() throws Exception {
         if (instancePtr != 0) {
-            this.closeInstance(instancePtr);
+            this.closeInstance(instancePtr, this.store.getStorePtr());
         }
         instancePtr = 0;
     }
@@ -75,5 +75,32 @@ public final class WasmtimeInstance implements AutoCloseable {
      */
     public WasmtimeMemory getMemory(String name) {
         return new WasmtimeMemory(this, store, name);
+    }
+
+    /**
+     * Returns a the WasmtimeStore of this instance
+     * 
+     * @return The WasmtimeStore object
+     */
+    public WasmtimeStore getStore() {
+        return this.store;
+    }
+
+    /**
+     * Returns a the WasmtimeModule of this instance
+     * 
+     * @return The WasmtimeModule object
+     */
+    public WasmtimeModule getModule() {
+        return this.module;
+    }
+
+    /**
+     * Returns a the WasmtimeLinker of this instance
+     * 
+     * @return The WasmtimeLinker object
+     */
+    public WasmtimeLinker getLinker() {
+        return this.linker;
     }
 }

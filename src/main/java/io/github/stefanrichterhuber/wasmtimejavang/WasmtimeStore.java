@@ -70,4 +70,13 @@ public final class WasmtimeStore implements AutoCloseable {
     public Map<String, Object> getContext() {
         return this.context;
     }
+
+    /**
+     * Returns the WasmtimeEngine associated with this store.
+     * 
+     * @return The WasmtimeEngine instance.
+     */
+    public WasmtimeEngine getEngine() {
+        return this.engine;
+    }
 }

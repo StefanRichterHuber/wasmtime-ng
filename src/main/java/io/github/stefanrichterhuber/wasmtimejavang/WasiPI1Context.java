@@ -898,6 +898,7 @@ public class WasiPI1Context implements WasmContext {
                 List.of(ValType.I32, ValType.I32, ValType.I32, ValType.I32, ValType.I64, ValType.I64, ValType.I32),
                 List.of(ValType.I32), (WasmtimeInstance instance, Map<String, Object> context, long[] args) -> {
                     int fd = (int) args[0];
+                    @SuppressWarnings("unused")
                     int flags = (int) args[1];
                     int path_ptr = (int) args[2];
                     int path_len = (int) args[3];
@@ -917,6 +918,7 @@ public class WasiPI1Context implements WasmContext {
                 List.of(ValType.I32, ValType.I32, ValType.I32, ValType.I32, ValType.I32, ValType.I32, ValType.I32),
                 List.of(ValType.I32), (WasmtimeInstance instance, Map<String, Object> context, long[] args) -> {
                     int old_fd = (int) args[0];
+                    @SuppressWarnings("unused")
                     int old_flags = (int) args[1];
                     int old_path_ptr = (int) args[2];
                     int old_path_len = (int) args[3];
@@ -944,6 +946,7 @@ public class WasiPI1Context implements WasmContext {
                         ValType.I32, ValType.I32),
                 List.of(ValType.I32), (WasmtimeInstance instance, Map<String, Object> context, long[] args) -> {
                     int fd = (int) args[0];
+                    @SuppressWarnings("unused")
                     int dirflags = (int) args[1];
                     int path_ptr = (int) args[2];
                     int path_len = (int) args[3];
@@ -1190,6 +1193,7 @@ public class WasiPI1Context implements WasmContext {
                 List.of(ValType.I32, ValType.I32, ValType.I32),
                 List.of(ValType.I32), (WasmtimeInstance instance, Map<String, Object> context, long[] args) -> {
                     int fd = (int) args[0];
+                    @SuppressWarnings("unused")
                     int flags = (int) args[1];
                     int fd_ptr = (int) args[2];
 

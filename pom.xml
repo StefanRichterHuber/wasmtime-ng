@@ -262,6 +262,33 @@
                             </environmentVariables>
                         </configuration>
                     </execution>
+
+                    <execution>
+                        <id>build wasm test wasip1threadtest</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>generate-test-resources</phase>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <workingDirectory>${project.basedir}/src/test/rust/wasip1threadtest</workingDirectory>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--profile</argument>
+                                <!-- Always use dev, profile for faster build: its just a test -->
+                                <argument>dev</argument>
+                                <argument>--target</argument>
+                                <argument>wasm32-wasip1-threads</argument>
+                                <argument>--target-dir</argument>
+                                <argument>${project.build.directory}/rust-test/wasip1threadtest</argument>
+                            </arguments>
+                            <environmentVariables>
+                                <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                                <RUSTFLAGS>-C link-arg=--max-memory=131072 -C
+                                    link-arg=-zstack-size=32768</RUSTFLAGS>
+                            </environmentVariables>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 

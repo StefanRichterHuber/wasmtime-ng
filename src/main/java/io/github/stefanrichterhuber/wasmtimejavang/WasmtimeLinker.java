@@ -91,4 +91,23 @@ public final class WasmtimeLinker implements AutoCloseable {
         defineFunction(this.engine.getEnginePtr(), this.store.getStorePtr(), getLinkerPtr(), f, module, name,
                 parameters, returnTypes);
     }
+
+      /**
+     * Returns a the WasmtimeStore of this instance
+     * 
+     * @return The WasmtimeStore object
+     */
+    public WasmtimeStore getStore() {
+        return this.store;
+    }
+
+    /**
+     * Returns a the WasmtimeEngine of this instance
+     * 
+     * @return The WasmtimeEngine object
+     */
+    public WasmtimeEngine getEngine() {
+        return this.engine;
+    }
+
 }

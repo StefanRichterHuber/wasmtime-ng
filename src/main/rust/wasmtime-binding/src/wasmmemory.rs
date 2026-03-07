@@ -1,6 +1,8 @@
 use crate::wasminstance::InstanceHandle;
 use crate::wasmstore::StoreHandle;
 use jni::{bind_java_type, jni_str, strings::JNIString};
+use log::error;
+use wasmtime::Extern;
 
 bind_java_type! {
     rust_type = JWasmtimeMemory,
@@ -39,15 +41,25 @@ impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
         let name = name.to_string();
         let instance = unsafe { instance.as_ref() };
         let store = unsafe { store.as_ref() };
-        match instance.get_memory(&mut *store, &name) {
-            Some(mem) => {
+
+
+        let export = instance.get_export(&mut *store, &name);
+        match export {
+            Some(Extern::Memory(mem)) => {
                 let data = mem.data_mut(store);
                 let ptr = data.as_mut_ptr();
                 let len = data.len();
                 let buffer = unsafe { env.new_direct_byte_buffer(ptr, len)? };
                 Ok(buffer)
             }
-            None => {
+            Some(Extern::SharedMemory(mem)) => {
+                let ptr = mem.data().as_ptr();
+                let len = mem.data_size();
+                let buffer = unsafe { env.new_direct_byte_buffer(ptr as *mut u8, len)? };
+                Ok(buffer)
+            }
+            _ => {
+                error!("Wasm memory '{}' not found in instance!", name);
                 let msg = format!("Wasm memory '{}' not found!", name);
                 env.throw_new(jni_str!("java/lang/RuntimeException"), JNIString::from(msg))?;
                 Ok(unsafe { env.new_direct_byte_buffer(std::ptr::null_mut(), 0)? })
@@ -56,7 +68,7 @@ impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
     }
 
     fn get_memory_size<'local>(
-        _env: &mut ::jni::Env<'local>,
+        env: &mut ::jni::Env<'local>,
         _this: JWasmtimeMemory<'local>,
         instance: InstanceHandle,
         store: StoreHandle,
@@ -65,9 +77,16 @@ impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
         let name = name.to_string();
         let instance = unsafe { instance.as_ref() };
         let store = unsafe { store.as_ref() };
-        match instance.get_memory(&mut *store, &name) {
-            Some(mem) => Ok(mem.data_size(store) as ::jni::sys::jlong),
-            None => Ok(0),
+
+        let export = instance.get_export(&mut *store, &name);
+        match export {
+            Some(Extern::Memory(mem)) => Ok(mem.data_size(store) as ::jni::sys::jlong),
+            Some(Extern::SharedMemory(mem)) => Ok(mem.data_size() as ::jni::sys::jlong),
+            _ => {
+                let msg = format!("Wasm memory '{}' not found!", name);
+                env.throw_new(jni_str!("java/lang/RuntimeException"), JNIString::from(msg))?;
+                Ok(0)
+            }
         }
     }
 
@@ -82,12 +101,18 @@ impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
         let name = name.to_string();
         let instance = unsafe { instance.as_ref() };
         let store = unsafe { store.as_ref() };
-        match instance.get_memory(&mut *store, &name) {
-            Some(mem) => {
+
+        let export = instance.get_export(&mut *store, &name);
+        match export {
+            Some(Extern::Memory(mem)) => {
                 mem.grow(store, delta.try_into().unwrap()).unwrap();
                 Ok(())
             }
-            None => {
+            Some(Extern::SharedMemory(mem)) => {
+                mem.grow(delta.try_into().unwrap()).unwrap();
+                Ok(())
+            }
+            _ => {
                 let msg = format!("Wasm memory '{}' not found!", name);
                 env.throw_new(jni_str!("java/lang/RuntimeException"), JNIString::from(msg))?;
                 Ok(())
