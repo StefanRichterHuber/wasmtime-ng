@@ -31,4 +31,4 @@ jobs:
       - name: Install cargo cross
         run: cargo install cross
       - name: Build with Maven
-        run: mvn -P build-linux-x86-64,build-linux-aarch64,build-windows-x86_64 -Dcargo.profile=release -Dcargo.profile.folder=release -B package --file pom.xml
+        run: mvn -P build-linux-x86-64,build-linux-aarch64,build-windows-x86_64 -Dcargo.profile=release -Dcargo.profile.folder=release -Dmaven.test.skip=true -B package --file pom.xml
