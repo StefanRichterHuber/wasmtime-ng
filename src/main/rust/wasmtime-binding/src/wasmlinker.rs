@@ -1,4 +1,5 @@
 use crate::wasmengine::EngineHandle;
+use crate::wasmsharedmemory::SharedMemoryHandle;
 use crate::wasmstore::StoreHandle;
 use jni::{
     JValue, bind_java_type, jni_sig, jni_str,
@@ -43,7 +44,7 @@ bind_java_type! {
         unsafe EngineHandle => long,
         unsafe LinkerHandle => long,
         unsafe StoreHandle => long,
-
+        unsafe SharedMemoryHandle => long,
     },
 
     constructors {
@@ -57,7 +58,8 @@ bind_java_type! {
     native_methods {
         extern fn create_linker(engine: EngineHandle) -> jlong,
         extern fn close_linker(linker: LinkerHandle),
-        extern fn define_function(engine: EngineHandle, store:StoreHandle, linker: LinkerHandle, func: io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction, module: JString, name: JString, parameters: JList, return_types: JList)
+        extern fn define_function(engine: EngineHandle, store:StoreHandle, linker: LinkerHandle, func: io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction, module: JString, name: JString, parameters: JList, return_types: JList),
+        extern fn define_memory(store: StoreHandle, linker: LinkerHandle, shared_memory: SharedMemoryHandle, module: JString, name: JString)
     }
 }
 
@@ -195,6 +197,29 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                 dynamic_func,
             )
             .unwrap();
+        Ok(())
+    }
+
+    fn define_memory<'local>(
+        _env: &mut ::jni::Env<'local>,
+        _this: JWasmtimeLinker<'local>,
+        store: StoreHandle,
+        linker: LinkerHandle,
+        shared_memory: SharedMemoryHandle,
+        module: ::jni::objects::JString<'local>,
+        name: ::jni::objects::JString<'local>,
+    ) -> ::std::result::Result<(), Self::Error> {
+        let store = unsafe { store.as_ref() };
+        let linker = unsafe { linker.as_ref() };
+        let shared_memory = unsafe { shared_memory.as_ref() };
+        let module = module.to_string();
+        let name = name.to_string();
+
+        linker.allow_shadowing(true);
+        linker
+            .define(&mut *store, &module, &name, shared_memory.clone())
+            .unwrap();
+
         Ok(())
     }
 }

@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,7 +27,7 @@ public final class WasmtimeStore implements AutoCloseable {
     /**
      * Global context. Thread-safe
      */
-    private final Map<String, Object> context = new ConcurrentHashMap<>();
+    private final Map<String, Object> context;
 
     /**
      * Closes the store and releases native resources.
@@ -51,14 +52,25 @@ public final class WasmtimeStore implements AutoCloseable {
     /**
      * Creates a new WasmtimeStore.
      * 
-     * @param engine The engine associated with this store.
+     * @param engine  The engine associated with this store.
+     * @param context Mutable Map to use as context
      */
-    public WasmtimeStore(WasmtimeEngine engine) {
+    public WasmtimeStore(WasmtimeEngine engine, Map<String, Object> context) {
         if (engine == null) {
             throw new NullPointerException("WasmtimeEngine must not be null");
         }
+        this.context = context;
         this.engine = engine;
         this.storePtr = createStore(engine.getEnginePtr(), this.context);
+    }
+
+    /**
+     * Creates a new WasmtimeStore.
+     * 
+     * @param engine The engine associated with this store.
+     */
+    public WasmtimeStore(WasmtimeEngine engine) {
+        this(engine, new HashMap<>());
     }
 
     /**

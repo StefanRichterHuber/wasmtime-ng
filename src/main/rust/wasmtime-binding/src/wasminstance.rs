@@ -104,7 +104,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         let name = name.to_string();
         let s = unsafe { store.as_ref() };
 
-        let result = match instance.get_func(s, &name) {
+        let result = match instance.get_func(&mut *s, &name) {
             Some(func) => {
                 let s = unsafe { store.as_ref() };
                 let param_types: Vec<wasmtime::ValType> = func.ty(&mut *s).params().collect();

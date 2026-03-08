@@ -5,6 +5,8 @@ import java.util.List;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import io.github.stefanrichterhuber.wasmtimejavang.WasmContext.Importmemory;
+
 /**
  * Used to resolve imports for a WebAssembly module.
  * The linker allows providing Java-implemented functions or WASI contexts
@@ -26,6 +28,8 @@ public final class WasmtimeLinker implements AutoCloseable {
             String module, String name,
             List<ValType> params,
             List<ValType> returnTypes);
+
+    private native void defineMemory(long storePtr, long linkerPtr, long sharedMemoryPtr, String module, String name);
 
     /**
      * Closes the linker and releases native resources.
@@ -72,19 +76,23 @@ public final class WasmtimeLinker implements AutoCloseable {
      */
     public void link(WasmContext context) {
         for (WasmContext.ImportFunction importFunction : context.getImportFunctions()) {
-            importFunction(importFunction.module(), importFunction.name(), importFunction.parameters(),
+            this.importFunction(importFunction.module(), importFunction.name(), importFunction.parameters(),
                     importFunction.returnTypes(), importFunction.function());
+        }
+
+        for (Importmemory memory : context.getMemories()) {
+            this.defineSharedMemory(memory.module(), memory.name(), memory.memory());
         }
     }
 
     /**
      * Explicitly imports a Java function into the WASM module.
      * 
-     * @param module     The name of the module providing the import.
-     * @param name       The name of the imported function.
-     * @param parameters The parameter types of the function.
+     * @param module      The name of the module providing the import.
+     * @param name        The name of the imported function.
+     * @param parameters  The parameter types of the function.
      * @param returnTypes The return types of the function.
-     * @param f          The Java function implementation.
+     * @param f           The Java function implementation.
      */
     public void importFunction(String module, String name, List<ValType> parameters, List<ValType> returnTypes,
             WasmtimeFunction f) {
@@ -92,7 +100,18 @@ public final class WasmtimeLinker implements AutoCloseable {
                 parameters, returnTypes);
     }
 
-      /**
+    /**
+     * Defines a shared memory in the linker.
+     * 
+     * @param module The module name for the shared memory import.
+     * @param name   The name for the shared memory import.
+     * @param memory The shared memory to define.
+     */
+    public void defineSharedMemory(String module, String name, WasmtimeSharedMemory memory) {
+        defineMemory(this.store.getStorePtr(), getLinkerPtr(), memory.getSharedMemoryPtr(), module, name);
+    }
+
+    /**
      * Returns a the WasmtimeStore of this instance
      * 
      * @return The WasmtimeStore object

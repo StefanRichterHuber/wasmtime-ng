@@ -10,15 +10,20 @@ public interface WasmContext {
     /**
      * Represents an imported function definition.
      * 
-     * @param module     The name of the module providing the function.
-     * @param name       The name of the function.
-     * @param parameters The parameter types of the function.
+     * @param module      The name of the module providing the function.
+     * @param name        The name of the function.
+     * @param parameters  The parameter types of the function.
      * @param returnTypes The return types of the function.
-     * @param function   The Java implementation of the function.
+     * @param function    The Java implementation of the function.
      */
     public record ImportFunction(String module, String name, List<ValType> parameters, List<ValType> returnTypes,
             WasmtimeFunction function) {
+    }
 
+    /**
+     * Reprsents an imported memory definition
+     */
+    public record Importmemory(String module, String name, WasmtimeSharedMemory memory) {
     }
 
     /**
@@ -26,5 +31,8 @@ public interface WasmContext {
      * 
      * @return A list of ImportFunction objects.
      */
-    public List<ImportFunction> getImportFunctions();
+    List<ImportFunction> getImportFunctions();
+
+    List<Importmemory> getMemories();
+
 }

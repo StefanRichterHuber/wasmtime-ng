@@ -1,7 +1,7 @@
 use crate::wasminstance::InstanceHandle;
 use crate::wasmstore::StoreHandle;
 use jni::{bind_java_type, jni_str, strings::JNIString};
-use log::error;
+use log::{debug, error};
 use wasmtime::Extern;
 
 bind_java_type! {
@@ -42,10 +42,10 @@ impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
         let instance = unsafe { instance.as_ref() };
         let store = unsafe { store.as_ref() };
 
-
         let export = instance.get_export(&mut *store, &name);
         match export {
             Some(Extern::Memory(mem)) => {
+                debug!("Accessing single-instance memory {}", name);
                 let data = mem.data_mut(store);
                 let ptr = data.as_mut_ptr();
                 let len = data.len();
@@ -53,6 +53,7 @@ impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
                 Ok(buffer)
             }
             Some(Extern::SharedMemory(mem)) => {
+                debug!("Accessing shared memory {}", name);
                 let ptr = mem.data().as_ptr();
                 let len = mem.data_size();
                 let buffer = unsafe { env.new_direct_byte_buffer(ptr as *mut u8, len)? };
@@ -80,8 +81,14 @@ impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
 
         let export = instance.get_export(&mut *store, &name);
         match export {
-            Some(Extern::Memory(mem)) => Ok(mem.data_size(store) as ::jni::sys::jlong),
-            Some(Extern::SharedMemory(mem)) => Ok(mem.data_size() as ::jni::sys::jlong),
+            Some(Extern::Memory(mem)) => {
+                debug!("Reading size of single-instance memory {}", name);
+                Ok(mem.data_size(store) as ::jni::sys::jlong)
+            }
+            Some(Extern::SharedMemory(mem)) => {
+                debug!("Reading size of shared memory {}", name);
+                Ok(mem.data_size() as ::jni::sys::jlong)
+            }
             _ => {
                 let msg = format!("Wasm memory '{}' not found!", name);
                 env.throw_new(jni_str!("java/lang/RuntimeException"), JNIString::from(msg))?;
@@ -105,10 +112,12 @@ impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
         let export = instance.get_export(&mut *store, &name);
         match export {
             Some(Extern::Memory(mem)) => {
+                debug!("Growing single-instance memory {} by {} pages", name, delta);
                 mem.grow(store, delta.try_into().unwrap()).unwrap();
                 Ok(())
             }
             Some(Extern::SharedMemory(mem)) => {
+                debug!("Growing shared memory {} by {} pages", name, delta);
                 mem.grow(delta.try_into().unwrap()).unwrap();
                 Ok(())
             }
