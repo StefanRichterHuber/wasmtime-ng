@@ -44,7 +44,7 @@ public class WasmtimeWasiVFSTest {
                     .withStdErr(baos));
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-                instance.invoke("_start", List.of());
+                instance.invoke("_start");
             }
 
             String output = baos.toString();

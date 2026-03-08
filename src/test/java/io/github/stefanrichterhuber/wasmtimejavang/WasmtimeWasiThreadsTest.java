@@ -34,7 +34,7 @@ public class WasmtimeWasiThreadsTest {
             linker.link(threadContext);
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-                instance.invoke("_start", List.of());
+                instance.invoke("_start");
             }
 
             // Give some time for threads to finish and print

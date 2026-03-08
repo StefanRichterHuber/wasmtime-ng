@@ -8,7 +8,6 @@ import java.io.FileInputStream;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +41,7 @@ public class WasmtimeWasiFileSystemTest {
                     .withStdErr(System.err));
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-                List<Object> result = instance.invoke("_start", List.of());
+                Object[] result = instance.invoke("_start");
                 assertNotNull(result);
             }
 

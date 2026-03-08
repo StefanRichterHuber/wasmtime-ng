@@ -119,7 +119,7 @@ public class WasmtimeEngineTest {
             });
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-                List<Object> result = instance.invoke("run", List.of());
+                Object[] result = instance.invoke("run");
                 assertNotNull(result);
             }
 
