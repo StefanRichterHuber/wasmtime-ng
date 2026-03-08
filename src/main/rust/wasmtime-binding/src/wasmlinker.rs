@@ -1,10 +1,9 @@
-use crate::wasmengine::EngineHandle;
 use crate::wasmsharedmemory::SharedMemoryHandle;
 use crate::wasmstore::StoreHandle;
+use crate::{wasmengine::EngineHandle, wasmstore::StoreContent};
 use jni::{
     JValue, bind_java_type, jni_sig, jni_str,
-    objects::{JList, JLongArray, JMap, JObject, JString},
-    refs::Global,
+    objects::{JList, JLongArray, JObject, JString},
     sys::jlong,
 };
 use log::{debug, error};
@@ -12,21 +11,21 @@ use wasmtime::{Func, FuncType, Linker, Val, ValType};
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct LinkerHandle(*mut Linker<Global<JMap<'static>>>);
+pub struct LinkerHandle(*mut Linker<StoreContent>);
 
 #[allow(dead_code)]
 impl LinkerHandle {
-    pub fn new(linker: Linker<Global<JMap<'static>>>) -> Self {
+    pub fn new(linker: Linker<StoreContent>) -> Self {
         let boxed = Box::new(linker);
         LinkerHandle(Box::into_raw(boxed))
     }
 
-    pub unsafe fn as_ref(&self) -> &mut Linker<Global<JMap<'static>>> {
+    pub unsafe fn as_ref(&self) -> &mut Linker<StoreContent> {
         unsafe { &mut *self.0 }
     }
 
-    pub unsafe fn into_box(self) -> Box<Linker<Global<JMap<'static>>>> {
-        unsafe { Box::from_raw(self.0 as *mut Linker<Global<JMap<'static>>>) }
+    pub unsafe fn into_box(self) -> Box<Linker<StoreContent>> {
+        unsafe { Box::from_raw(self.0 as *mut Linker<StoreContent>) }
     }
 }
 
@@ -124,16 +123,14 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                 let result: std::result::Result<Vec<i64>, jni::errors::Error> = jvm
                     .attach_current_thread(|env| {
                         // We need to the the instance object from the store map
-                        let java_map = caller.data();
-                        let instance_key = JString::from_str(env, "__instance")?;
-                        let instance_obj = env
-                            .call_method(
-                                java_map,
-                                jni_str!("get"),
-                                jni_sig!((java.lang.Object) -> java.lang.Object),
-                                &[JValue::Object(&instance_key)],
-                            )?
-                            .l()?;
+                        let java_map = &caller.data().context;
+                        let instance_obj = match caller.data().instance.as_ref() {
+                            Some(instance) => instance,
+                            None =>  {
+                                 error!("Field instance not found in store"); 
+                                 return Err(jni::errors::Error::FieldNotFound { name: "instance".to_owned(), sig: "io/github/stefanrichterhuber/wasmtimejavang/WasmtimeInstance".to_owned() }); 
+                                },
+                        };
 
                         // Convert the args to a JLongArray
                         let args_array = env.new_long_array(args.len())?;
@@ -147,12 +144,11 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                             }
                         }
                         args_array.set_region(env, 0, args_values.as_slice())?;
-                        let context_map = caller.data();
                         let call_result = env.call_method(
                             &func,
                             jni_str!("call"),
                             jni_sig!( ( io.github.stefanrichterhuber.wasmtimejavang.WasmtimeInstance, java.util.Map, jlong[]) -> jlong[]),
-                            &[JValue::Object(&instance_obj),JValue::Object(context_map), JValue::Object(&args_array)],
+                            &[JValue::Object(&instance_obj),JValue::Object(java_map), JValue::Object(&args_array)],
                         )?;
 
                         env.exception_catch()?;

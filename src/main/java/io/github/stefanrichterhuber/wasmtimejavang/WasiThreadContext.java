@@ -1,7 +1,6 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -95,9 +94,7 @@ public class WasiThreadContext implements WasmContext {
         }
 
         final Thread thread = new Thread(() -> {
-            // Create a copy of the context map (to ensure both maps have independent
-            // __instance entries)
-            try (WasmtimeStore threadStore = new WasmtimeStore(engine, new HashMap<>(context));
+            try (WasmtimeStore threadStore = new WasmtimeStore(engine, context);
                     WasmtimeLinker threadLinker = new WasmtimeLinker(engine, threadStore)) {
 
                 // Link all contexts to the new linker

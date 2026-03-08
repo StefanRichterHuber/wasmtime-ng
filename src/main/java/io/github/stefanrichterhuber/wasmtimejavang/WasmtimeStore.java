@@ -1,7 +1,7 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -52,7 +52,8 @@ public final class WasmtimeStore implements AutoCloseable {
      * Creates a new WasmtimeStore.
      * 
      * @param engine  The engine associated with this store.
-     * @param context Mutable Map to use as context
+     * @param context Mutable Map to use as context. When wasm threads is used, this
+     *                map must be thread-safe!
      */
     public WasmtimeStore(WasmtimeEngine engine, Map<String, Object> context) {
         if (engine == null) {
@@ -69,7 +70,7 @@ public final class WasmtimeStore implements AutoCloseable {
      * @param engine The engine associated with this store.
      */
     public WasmtimeStore(WasmtimeEngine engine) {
-        this(engine, new HashMap<>());
+        this(engine, new ConcurrentHashMap<>());
     }
 
     /**
