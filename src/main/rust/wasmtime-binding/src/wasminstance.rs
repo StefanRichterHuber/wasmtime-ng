@@ -3,10 +3,7 @@ use crate::wasmlinker::LinkerHandle;
 use crate::wasmmodule::ModuleHandle;
 use crate::wasmstore::StoreHandle;
 use jni::{
-    JValue, bind_java_type, jni_sig, jni_str,
-    objects::{JList, JString},
-    strings::JNIString,
-    sys::jlong,
+    JValue, bind_java_type, jni_sig, jni_str, objects::JList, strings::JNIString, sys::jlong,
 };
 use log::{debug, error};
 use wasmtime::{Instance, Val};
@@ -69,23 +66,14 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
     type Error = jni::errors::Error;
 
     fn close_instance<'local>(
-        env: &mut ::jni::Env<'local>,
+        _env: &mut ::jni::Env<'local>,
         _this: JWasmtimeInstance<'local>,
         instance: InstanceHandle,
         store: StoreHandle,
     ) -> ::std::result::Result<(), Self::Error> {
         debug!("Closing Instance");
         // Remove the instance from the store map
-        let java_map = unsafe { store.as_ref() }.data_mut();
-        let key = JString::from_str(env, "__instance")?;
-
-        // Remove the object reference from the store
-        env.call_method(
-            &java_map,
-            jni_str!("remove"),
-            jni_sig!((java.lang.Object) -> java.lang.Object),
-            &[JValue::Object(&key)],
-        )?;
+        unsafe { store.as_ref() }.data_mut().instance = None;
 
         drop(unsafe { instance.into_box() });
         debug!("Instance closed successfully");
@@ -152,15 +140,8 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         };
 
         // Store a reference to the java instance in the store
-        let java_map = unsafe { store.as_ref() }.data_mut();
-        let key = JString::from_str(env, "__instance")?;
-        env.call_method(
-            java_map,
-            jni_str!("put"),
-            jni_sig!((java.lang.Object, java.lang.Object) -> java.lang.Object),
-            &[JValue::Object(&key), JValue::Object(&this.0)],
-        )?;
-
+        let global_this = env.new_global_ref(this.0)?;
+        unsafe { store.as_ref() }.data_mut().instance = Some(global_this);
         debug!("Created Instance");
         Ok(result)
     }

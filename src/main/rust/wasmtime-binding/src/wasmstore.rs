@@ -1,24 +1,46 @@
 use crate::wasmengine::EngineHandle;
-use jni::{bind_java_type, objects::JMap, refs::Global, sys::jlong};
+use jni::{
+    bind_java_type,
+    objects::{JMap, JObject},
+    refs::Global,
+    sys::jlong,
+};
 use log::debug;
 use wasmtime::Store;
 
+///
+/// StoreContent is a wrapper for the Java context map and the WasmtimeInstance (only populated when the instance is created)
+///
+pub struct StoreContent {
+    pub context: Global<JMap<'static>>,
+    pub instance: Option<Global<JObject<'static>>>,
+}
+
+impl StoreContent {
+    pub fn new(context: Global<JMap<'static>>) -> Self {
+        StoreContent {
+            context,
+            instance: None,
+        }
+    }
+}
+
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct StoreHandle(*mut Store<Global<JMap<'static>>>);
+pub struct StoreHandle(*mut Store<StoreContent>);
 
 impl StoreHandle {
-    pub fn new(store: Store<Global<JMap<'static>>>) -> Self {
+    pub fn new(store: Store<StoreContent>) -> Self {
         let boxed = Box::new(store);
         StoreHandle(Box::into_raw(boxed))
     }
 
-    pub unsafe fn as_ref(&self) -> &mut Store<Global<JMap<'static>>> {
+    pub unsafe fn as_ref(&self) -> &mut Store<StoreContent> {
         unsafe { &mut *self.0 }
     }
 
-    pub unsafe fn into_box(self) -> Box<Store<Global<JMap<'static>>>> {
-        unsafe { Box::from_raw(self.0 as *mut Store<Global<JMap<'static>>>) }
+    pub unsafe fn into_box(self) -> Box<Store<StoreContent>> {
+        unsafe { Box::from_raw(self.0 as *mut Store<StoreContent>) }
     }
 }
 
@@ -58,7 +80,7 @@ impl JWasmtimeStoreNativeInterface for JWasmtimeStoreAPI {
     ) -> ::std::result::Result<::jni::sys::jlong, Self::Error> {
         let jmap = env.new_global_ref(context)?;
 
-        let store = Store::new(unsafe { engine.as_ref() }, jmap);
+        let store = Store::new(unsafe { engine.as_ref() }, StoreContent::new(jmap));
         let result = StoreHandle::new(store);
         debug!("Created store with Map");
         Ok(result.into())
