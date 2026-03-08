@@ -50,7 +50,7 @@ public class WasiPI1Context implements WasmContext {
     private static final String WASI_SNAPSHOT_PREVIEW1_MODULE = "wasi_snapshot_preview1";
 
     /**
-     * The main, shared memory of the application
+     * The main memory of the application
      */
     private static final String STD_MEMORY = "memory";
 

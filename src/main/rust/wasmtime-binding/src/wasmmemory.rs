@@ -25,6 +25,7 @@ bind_java_type! {
         extern fn grow_memory(instance: InstanceHandle, store: StoreHandle,  name: JString, delta: jlong),
         extern fn get_direct_buffer(instance: InstanceHandle, store: StoreHandle, name: JString) -> JByteBuffer,
         extern fn get_memory_size(instance: InstanceHandle, store: StoreHandle, name: JString) -> jlong,
+        extern fn check_if_shared_memory(instance: InstanceHandle, store: StoreHandle, name: JString) -> jboolean
     }
 }
 
@@ -125,6 +126,36 @@ impl JWasmtimeLocalMemoryNativeInterface for JWasmtimeLocalMemoryAPI {
                 let msg = format!("Wasm memory '{}' not found!", name);
                 env.throw_new(jni_str!("java/lang/RuntimeException"), JNIString::from(msg))?;
                 Ok(())
+            }
+        }
+    }
+
+    fn check_if_shared_memory<'local>(
+        env: &mut ::jni::Env<'local>,
+        _this: JWasmtimeLocalMemory<'local>,
+        instance: InstanceHandle,
+        store: StoreHandle,
+        name: ::jni::objects::JString<'local>,
+    ) -> ::std::result::Result<::jni::sys::jboolean, Self::Error> {
+        let name = name.to_string();
+        let instance = unsafe { instance.as_ref() };
+        let store = unsafe { store.as_ref() };
+
+        let export = instance.get_export(&mut *store, &name);
+
+        match export {
+            Some(Extern::Memory(_mem)) => {
+                debug!("Memory {} is not shared", name);
+                Ok(false)
+            }
+            Some(Extern::SharedMemory(_mem)) => {
+                debug!("Memory {} is shared", name);
+                Ok(true)
+            }
+            _ => {
+                let msg = format!("Wasm memory '{}' not found!", name);
+                env.throw_new(jni_str!("java/lang/RuntimeException"), JNIString::from(msg))?;
+                Ok(false)
             }
         }
     }

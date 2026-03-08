@@ -21,6 +21,11 @@ public class WasiThreadContext implements WasmContext {
     private static final Logger LOGGER = LogManager.getLogger();
 
     /**
+     * The main memory of the application
+     */
+    private static final String STD_MEMORY = "memory";
+
+    /**
      * Wasm module for thread support
      */
     private static final String WASI_THREADS_MODULE = "wasi_threads";
@@ -83,6 +88,11 @@ public class WasiThreadContext implements WasmContext {
     private long[] spawnThread(WasmtimeInstance instance, Map<String, Object> context, long[] args) {
         final int arg = (int) args[0];
         final int tid = nextTid.getAndIncrement();
+
+        if (!instance.getMemory(STD_MEMORY).isShared()) {
+            LOGGER.error("To support wasm multithread, a shared memory must be provided!");
+            throw new IllegalStateException("To support wasm multithread, a shared memory must be provided!");
+        }
 
         final Thread thread = new Thread(() -> {
             // Create a copy of the context map (to ensure both maps have independent

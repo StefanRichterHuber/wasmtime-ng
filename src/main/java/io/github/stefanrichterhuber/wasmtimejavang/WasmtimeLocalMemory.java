@@ -24,6 +24,8 @@ public class WasmtimeLocalMemory implements WasmtimeMemory {
 
     private native long getMemorySize(long instancePtr, long storePtr, String name);
 
+    private native boolean checkIfSharedMemory(long instancePtr, long storePtr, String name);
+
     /**
      * Internal constructor for WasmtimeMemory.
      * 
@@ -97,7 +99,7 @@ public class WasmtimeLocalMemory implements WasmtimeMemory {
 
     @Override
     public boolean isShared() {
-        return false;
+        return this.checkIfSharedMemory(getInstance().getInstancePtr(), getStore().getStorePtr(), getName());
     }
 
 }
