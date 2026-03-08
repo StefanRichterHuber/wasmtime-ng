@@ -7,7 +7,7 @@ use jni::{
     refs::Global,
     sys::jlong,
 };
-use log::debug;
+use log::{debug, error};
 use wasmtime::{Func, FuncType, Linker, Val, ValType};
 
 #[repr(transparent)]
@@ -103,6 +103,8 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         let params = convert_val_type_enum_list_to_vec(env, parameters)?;
         let results = convert_val_type_enum_list_to_vec(env, return_types)?;
 
+        let func_name = name.to_string();
+
         debug!(
             "Defining function: {}::{}({:?}) -> {:?}",
             module, name, params, results
@@ -179,12 +181,13 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                                 }
                             }
                         }
+                        Ok(())
                     }
-                    Err(_e) => {
-                        // TODO handle error
+                    Err(e) => {
+                        error!("Failed to invoke java function {}: {}", func_name, e);
+                        Err(convert_jvm_error_to_wasmtime_error(e))
                     }
                 }
-                Ok(())
             },
         );
         // 3. Add to Linker
@@ -222,6 +225,19 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
 
         Ok(())
     }
+}
+
+fn convert_jvm_error_to_wasmtime_error(jvm_error: jni::errors::Error) -> wasmtime::error::Error {
+    let mut result = wasmtime::error::Error::msg(jvm_error.to_string());
+
+    match jvm_error {
+        jni::errors::Error::CaughtJavaException { stack, .. } => {
+            result = result.context(stack);
+        }
+        _ => {}
+    }
+
+    result
 }
 
 fn convert_val_type_enum_list_to_vec<'local>(
