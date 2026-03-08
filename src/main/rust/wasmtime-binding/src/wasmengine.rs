@@ -64,7 +64,11 @@ impl JWasmtimeEngineNativeInterface for JWasmtimeEngineAPI {
         _this: JWasmtimeEngine<'local>,
     ) -> ::std::result::Result<::jni::sys::jlong, Self::Error> {
         debug!("Engine created");
-        let engine = Engine::default();
+        let mut config = wasmtime::Config::new();
+        config.wasm_threads(true);
+        config.wasm_bulk_memory(true);
+
+        let engine = Engine::new(&config).unwrap();
         let result = EngineHandle::new(engine);
         return Ok(result.into());
     }

@@ -103,12 +103,14 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         let instance = unsafe { instance.as_ref() };
         let name = name.to_string();
         let s = unsafe { store.as_ref() };
-        let args = convert_val_list_to_vec(env, parameters)?;
 
-        let result = match instance.get_func(s, &name) {
+        let result = match instance.get_func(&mut *s, &name) {
             Some(func) => {
                 let mut results = Vec::new();
-                match func.call(unsafe { store.as_ref() }, &args, &mut results) {
+                let param_types: Vec<wasmtime::ValType> = func.ty(&mut *s).params().collect();
+                let args = convert_val_list_to_vec(env, parameters, &param_types)?;
+
+                match func.call(&mut *s, &args, &mut results) {
                     Ok(()) => {
                         debug!("Successfully called function {}", name);
                         convert_val_vec_to_list(env, &results)?
@@ -200,12 +202,19 @@ pub fn convert_val_vec_to_list<'local>(
     let long_class = env.find_class(jni_str!("java/lang/Long"))?;
     for v in values.iter() {
         // First create Long object
+        let val_as_long = match v {
+            Val::I32(v) => *v as i64,
+            Val::I64(v) => *v,
+            Val::F32(v) => f32::from_bits(*v) as i64,
+            Val::F64(v) => f64::from_bits(*v) as i64,
+            _ => 0,
+        };
         let long_object = env
             .call_static_method(
                 &long_class,
                 jni_str!("valueOf"),
                 jni_sig!( (jlong) -> java.lang.Long),
-                &[JValue::Long(v.unwrap_i64())],
+                &[JValue::Long(val_as_long)],
             )?
             .l()?;
 
@@ -223,6 +232,7 @@ pub fn convert_val_vec_to_list<'local>(
 pub fn convert_val_list_to_vec<'local>(
     env: &mut ::jni::Env<'local>,
     values: JList,
+    param_types: &[wasmtime::ValType],
 ) -> Result<Vec<Val>, jni::errors::Error> {
     let iterator = env
         .call_method(
@@ -234,6 +244,7 @@ pub fn convert_val_list_to_vec<'local>(
         .l()?;
 
     let mut result = Vec::new();
+    let mut i = 0;
 
     // Call the iterator on the list to fetch each value
     while env
@@ -254,11 +265,43 @@ pub fn convert_val_list_to_vec<'local>(
             )?
             .l()?;
 
-        let long_value = env
-            .call_method(item, jni_str!("longValue"), jni_sig!( () ->jlong), &[])?
-            .j()?; // .j() extracts the jlong/i64 from the JValue return wrapper
+        let val_type = param_types.get(i).unwrap_or(&wasmtime::ValType::I64);
 
-        result.push(Val::I64(long_value));
+        let val = match val_type {
+            wasmtime::ValType::I32 => {
+                let v = env
+                    .call_method(&item, jni_str!("longValue"), jni_sig!( () ->jlong), &[])?
+                    .j()?;
+                Val::I32(v as i32)
+            }
+            wasmtime::ValType::I64 => {
+                let v = env
+                    .call_method(&item, jni_str!("longValue"), jni_sig!( () ->jlong), &[])?
+                    .j()?;
+                Val::I64(v)
+            }
+            wasmtime::ValType::F32 => {
+                let v = env
+                    .call_method(&item, jni_str!("doubleValue"), jni_sig!( () ->jdouble), &[])?
+                    .d()?;
+                Val::F32((v as f32).to_bits())
+            }
+            wasmtime::ValType::F64 => {
+                let v = env
+                    .call_method(&item, jni_str!("doubleValue"), jni_sig!( () ->jdouble), &[])?
+                    .d()?;
+                Val::F64(v.to_bits())
+            }
+            _ => {
+                let v = env
+                    .call_method(&item, jni_str!("longValue"), jni_sig!( () ->jlong), &[])?
+                    .j()?;
+                Val::I64(v)
+            }
+        };
+
+        result.push(val);
+        i += 1;
     }
 
     Ok(result)
