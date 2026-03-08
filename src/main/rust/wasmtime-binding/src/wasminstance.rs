@@ -72,7 +72,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         env: &mut ::jni::Env<'local>,
         _this: JWasmtimeInstance<'local>,
         instance: InstanceHandle,
-          store: StoreHandle,
+        store: StoreHandle,
     ) -> ::std::result::Result<(), Self::Error> {
         debug!("Closing Instance");
         // Remove the instance from the store map
@@ -106,11 +106,13 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
 
         let result = match instance.get_func(&mut *s, &name) {
             Some(func) => {
-                let mut results = Vec::new();
+                let s = unsafe { store.as_ref() };
                 let param_types: Vec<wasmtime::ValType> = func.ty(&mut *s).params().collect();
+                let result_types: Vec<wasmtime::ValType> = func.ty(&mut *s).results().collect();
                 let args = convert_val_list_to_vec(env, parameters, &param_types)?;
 
-                match func.call(&mut *s, &args, &mut results) {
+                let mut results = vec![Val::I64(0); result_types.len()];
+                match func.call(unsafe { store.as_ref() }, &args, &mut results) {
                     Ok(()) => {
                         debug!("Successfully called function {}", name);
                         convert_val_vec_to_list(env, &results)?
@@ -199,31 +201,67 @@ pub fn convert_val_vec_to_list<'local>(
     )?;
     let list_obj = JList::cast_local(env, list_obj)?;
 
-    let long_class = env.find_class(jni_str!("java/lang/Long"))?;
     for v in values.iter() {
-        // First create Long object
-        let val_as_long = match v {
-            Val::I32(v) => *v as i64,
-            Val::I64(v) => *v,
-            Val::F32(v) => f32::from_bits(*v) as i64,
-            Val::F64(v) => f64::from_bits(*v) as i64,
-            _ => 0,
+        let obj: Option<jni::objects::JObject> = match v {
+            Val::I32(v) => {
+                let class = env.find_class(jni_str!("java/lang/Integer"))?;
+                Some(
+                    env.call_static_method(
+                        &class,
+                        jni_str!("valueOf"),
+                        jni_sig!( (jint) -> java.lang.Integer),
+                        &[JValue::Int(*v)],
+                    )?
+                    .l()?,
+                )
+            }
+            Val::I64(v) => {
+                let class = env.find_class(jni_str!("java/lang/Long"))?;
+                Some(
+                    env.call_static_method(
+                        &class,
+                        jni_str!("valueOf"),
+                        jni_sig!( (jlong) -> java.lang.Long),
+                        &[JValue::Long(*v)],
+                    )?
+                    .l()?,
+                )
+            }
+            Val::F32(v) => {
+                let class = env.find_class(jni_str!("java/lang/Float"))?;
+                Some(
+                    env.call_static_method(
+                        &class,
+                        jni_str!("valueOf"),
+                        jni_sig!( (jfloat) -> java.lang.Float),
+                        &[JValue::Float(f32::from_bits(*v))],
+                    )?
+                    .l()?,
+                )
+            }
+            Val::F64(v) => {
+                let class = env.find_class(jni_str!("java/lang/Double"))?;
+                Some(
+                    env.call_static_method(
+                        &class,
+                        jni_str!("valueOf"),
+                        jni_sig!( (jdouble) -> java.lang.Double),
+                        &[JValue::Double(f64::from_bits(*v))],
+                    )?
+                    .l()?,
+                )
+            }
+            _ => None,
         };
-        let long_object = env
-            .call_static_method(
-                &long_class,
-                jni_str!("valueOf"),
-                jni_sig!( (jlong) -> java.lang.Long),
-                &[JValue::Long(val_as_long)],
-            )?
-            .l()?;
 
-        env.call_method(
-            &list_obj,
-            jni_str!("add"),
-            jni_sig!( (java.lang.Object) -> jboolean),
-            &[JValue::Object(&long_object)],
-        )?;
+        if let Some(obj_ref) = obj {
+            env.call_method(
+                &list_obj,
+                jni_str!("add"),
+                jni_sig!( (java.lang.Object) -> jboolean),
+                &[JValue::Object(&obj_ref)],
+            )?;
+        }
     }
 
     Ok(list_obj)

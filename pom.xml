@@ -289,6 +289,31 @@
                             </environmentVariables>
                         </configuration>
                     </execution>
+
+                    <execution>
+                        <id>build wasm test valuetest</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>generate-test-resources</phase>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <workingDirectory>${project.basedir}/src/test/rust/valuetest</workingDirectory>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--profile</argument>
+                                <!-- Always use dev, profile for faster build: its just a test -->
+                                <argument>dev</argument>
+                                <argument>--target</argument>
+                                <argument>wasm32-wasip1</argument>
+                                <argument>--target-dir</argument>
+                                <argument>${project.build.directory}/rust-test/valuetest</argument>
+                            </arguments>
+                            <environmentVariables>
+                                <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                            </environmentVariables>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 
