@@ -9,7 +9,7 @@ import java.nio.ByteOrder;
  * This class provides methods to read from and write to the WASM memory
  * from the host Java application.
  */
-public final class WasmtimeSharedMemory extends AbstractWasmtimeMemory implements AutoCloseable {
+public final class WasmtimeSharedMemory implements AutoCloseable, WasmtimeMemory {
     private final WasmtimeEngine engine;
     private long sharedMemoryPtr;
     private ByteBuffer buffer;
@@ -51,6 +51,7 @@ public final class WasmtimeSharedMemory extends AbstractWasmtimeMemory implement
      * 
      * @return A ByteBuffer mapping the WASM memory.
      */
+    @Override
     public ByteBuffer buffer() {
         final long currentSize = getMemorySize(sharedMemoryPtr);
         if (buffer == null || buffer.capacity() != currentSize) {
@@ -65,6 +66,7 @@ public final class WasmtimeSharedMemory extends AbstractWasmtimeMemory implement
      * 
      * @param delta The number of pages to add.
      */
+    @Override
     public void grow(long delta) {
         growMemory(sharedMemoryPtr, delta);
         // Invalidate buffer to force refresh on next access
@@ -77,5 +79,10 @@ public final class WasmtimeSharedMemory extends AbstractWasmtimeMemory implement
             closeSharedMemory(sharedMemoryPtr);
         }
         sharedMemoryPtr = 0;
+    }
+
+    @Override
+    public boolean isShared() {
+        return true;
     }
 }

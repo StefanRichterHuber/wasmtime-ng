@@ -74,7 +74,7 @@ public final class WasmtimeInstance implements AutoCloseable {
      * @return A WasmtimeMemory object representing the exported memory.
      */
     public WasmtimeMemory getMemory(String name) {
-        return new WasmtimeMemory(this, store, name);
+        return new WasmtimeLocalMemory(this, store, name);
     }
 
     /**

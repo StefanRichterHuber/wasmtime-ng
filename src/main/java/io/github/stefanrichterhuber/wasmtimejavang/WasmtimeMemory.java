@@ -1,41 +1,9 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import java.nio.charset.Charset;
 
-/**
- * Represents a WebAssembly linear memory.
- * This class provides methods to read from and write to the WASM memory
- * from the host Java application.
- * All multi-byte numeric operations use LITTLE_ENDIAN byte order as per the
- * WebAssembly specification.
- */
-public class WasmtimeMemory extends AbstractWasmtimeMemory {
-
-    private final WasmtimeInstance instance;
-    private final WasmtimeStore store;
-    private final String name;
-
-    private ByteBuffer buffer;
-
-    private native void growMemory(long instancePtr, long storePtr, String name, long delta);
-
-    private native ByteBuffer getDirectBuffer(long instancePtr, long storePtr, String name);
-
-    private native long getMemorySize(long instancePtr, long storePtr, String name);
-
-    /**
-     * Internal constructor for WasmtimeMemory.
-     * 
-     * @param instance The WASM instance this memory belongs to.
-     * @param store    The store associated with the instance.
-     * @param name     The name of the exported memory.
-     */
-    public WasmtimeMemory(WasmtimeInstance instance, WasmtimeStore store, String name) {
-        this.instance = instance;
-        this.store = store;
-        this.name = name;
-    }
+public interface WasmtimeMemory {
 
     /**
      * Returns a ByteBuffer view of the WASM memory.
@@ -43,13 +11,179 @@ public class WasmtimeMemory extends AbstractWasmtimeMemory {
      * 
      * @return A ByteBuffer mapping the WASM memory.
      */
-    public ByteBuffer buffer() {
-        final long currentSize = getMemorySize(getInstance().getInstancePtr(), getStore().getStorePtr(), getName());
-        if (buffer == null || buffer.capacity() != currentSize) {
-            buffer = getDirectBuffer(getInstance().getInstancePtr(), getStore().getStorePtr(), getName());
-            buffer.order(ByteOrder.LITTLE_ENDIAN);
+    ByteBuffer buffer();
+
+    /**
+     * Checks if this is a shared memory
+     * 
+     * @return
+     */
+    boolean isShared();
+
+    /**
+     * Writes a byte array to the specified memory address.
+     * 
+     * @param address The starting address in WASM memory.
+     * @param data    The byte array to write.
+     */
+    default void write(int address, byte[] data) {
+        buffer().put(address, data);
+    }
+
+    /**
+     * Writes a single byte to the specified memory address.
+     * 
+     * @param address The address in WASM memory.
+     * @param data    The byte to write.
+     */
+    default void write(int address, byte data) {
+        buffer().put(address, data);
+    }
+
+    /**
+     * Writes a 16-bit short to the specified memory address in little-endian order.
+     * 
+     * @param address The starting address in WASM memory.
+     * @param value   The short value to write.
+     */
+    default void writeShort(int address, short value) {
+        buffer().putShort(address, value);
+    }
+
+    /**
+     * Writes a 32-bit integer to the specified memory address in little-endian
+     * order.
+     * 
+     * @param address The starting address in WASM memory.
+     * @param value   The integer value to write.
+     */
+    default void writeInt(int address, int value) {
+        buffer().putInt(address, value);
+    }
+
+    /**
+     * Writes a 64-bit long to the specified memory address in little-endian order.
+     * 
+     * @param address The starting address in WASM memory.
+     * @param value   The long value to write.
+     */
+    default void writeLong(int address, long value) {
+        buffer().putLong(address, value);
+    }
+
+    /**
+     * Writes a string to the specified memory address using the given charset.
+     * 
+     * @param address The starting address in WASM memory.
+     * @param str     The string to write.
+     * @param charset The charset to use for encoding.
+     */
+    default void writeString(int address, String str, Charset charset) {
+        final byte[] buf = str.getBytes(charset);
+        this.write(address, buf);
+    }
+
+    /**
+     * Writes a null-terminated string (C-style string) to the specified memory
+     * address.
+     * 
+     * @param address The starting address in WASM memory.
+     * @param str     The string to write.
+     * @param charset The charset to use for encoding.
+     */
+    default void writeCString(int address, String str, Charset charset) {
+        final byte[] data = str.getBytes(charset);
+        final ByteBuffer buf = buffer();
+        buf.put(address, data);
+        buf.put(address + data.length, (byte) 0);
+    }
+
+    /**
+     * Reads a byte array of the specified length from the specified memory address.
+     * 
+     * @param address The starting address in WASM memory.
+     * @param len     The number of bytes to read.
+     * @return The byte array read from memory.
+     */
+    default byte[] read(int address, int len) {
+        final byte[] result = new byte[len];
+        buffer().get(address, result);
+        return result;
+    }
+
+    /**
+     * Reads a single byte from the specified memory address.
+     * 
+     * @param address The address in WASM memory.
+     * @return The byte read from memory.
+     */
+    default byte readByte(int address) {
+        return buffer().get(address);
+    }
+
+    /**
+     * Reads a 32-bit integer from the specified memory address in little-endian
+     * order.
+     * 
+     * @param address The starting address in WASM memory.
+     * @return The integer value read from memory.
+     */
+    default int readInt(int address) {
+        return buffer().getInt(address);
+    }
+
+    /**
+     * Reads a 64-bit long from the specified memory address in little-endian order.
+     * 
+     * @param address The starting address in WASM memory.
+     * @return The long value read from memory.
+     */
+    default long readLong(int address) {
+        return buffer().getLong(address);
+    }
+
+    /**
+     * Reads a 16-bit short from the specified memory address in little-endian
+     * order.
+     * 
+     * @param address The starting address in WASM memory.
+     * @return The short value read from memory.
+     */
+    default short readShort(int address) {
+        return buffer().getShort(address);
+    }
+
+    /**
+     * Reads a string of the specified length from memory using the given charset.
+     * 
+     * @param address The starting address in WASM memory.
+     * @param len     The length of the string in bytes.
+     * @param charset The charset to use for decoding.
+     * @return The string decoded from memory.
+     */
+    default String readString(int address, int len, Charset charset) {
+        final byte[] result = read(address, len);
+        return new String(result, charset);
+    }
+
+    /**
+     * Reads a null-terminated string (C-style string) from the specified memory
+     * address.
+     * 
+     * @param address The starting address in WASM memory.
+     * @param charset The charset to use for decoding.
+     * @return The string decoded from memory.
+     */
+    default String readCString(int address, Charset charset) {
+        final ByteBuffer buf = buffer();
+        int end = address;
+        while (buf.get(end) != 0) {
+            end++;
         }
-        return buffer;
+        final int len = end - address;
+        final byte[] data = new byte[len];
+        buf.get(address, data);
+        return new String(data, charset);
     }
 
     /**
@@ -59,38 +193,6 @@ public class WasmtimeMemory extends AbstractWasmtimeMemory {
      * 
      * @param delta The number of pages to add.
      */
-    public void grow(long delta) {
-        growMemory(getInstance().getInstancePtr(), getStore().getStorePtr(), getName(), delta);
-        // Invalidate buffer to force refresh on next access
-        this.buffer = null;
-    }
-
-    /**
-     * 
-     * Returns the WasmtimeInstance this memory belongs to.
-     * 
-     * @return The WasmtimeInstance associated with this memory.
-     */
-    public WasmtimeInstance getInstance() {
-        return instance;
-    }
-
-    /**
-     * Returns the WasmtimeStore associated with this memory.
-     * 
-     * @return The WasmtimeStore of this memory.
-     */
-    public WasmtimeStore getStore() {
-        return store;
-    }
-
-    /**
-     * Returns the name of the memory
-     * 
-     * @return
-     */
-    public String getName() {
-        return this.name;
-    }
+    void grow(long delta);
 
 }

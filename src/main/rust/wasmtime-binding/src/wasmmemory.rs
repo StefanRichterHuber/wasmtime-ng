@@ -5,8 +5,8 @@ use log::{debug, error};
 use wasmtime::Extern;
 
 bind_java_type! {
-    rust_type = JWasmtimeMemory,
-    java_type = "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeMemory",
+    rust_type = JWasmtimeLocalMemory,
+    java_type = "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeLocalMemory",
 
     type_map = {
         unsafe StoreHandle => long,
@@ -28,12 +28,12 @@ bind_java_type! {
     }
 }
 
-impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
+impl JWasmtimeLocalMemoryNativeInterface for JWasmtimeLocalMemoryAPI {
     type Error = jni::errors::Error;
 
     fn get_direct_buffer<'local>(
         env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeMemory<'local>,
+        _this: JWasmtimeLocalMemory<'local>,
         instance: InstanceHandle,
         store: StoreHandle,
         name: ::jni::objects::JString<'local>,
@@ -70,7 +70,7 @@ impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
 
     fn get_memory_size<'local>(
         env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeMemory<'local>,
+        _this: JWasmtimeLocalMemory<'local>,
         instance: InstanceHandle,
         store: StoreHandle,
         name: ::jni::objects::JString<'local>,
@@ -99,7 +99,7 @@ impl JWasmtimeMemoryNativeInterface for JWasmtimeMemoryAPI {
 
     fn grow_memory<'local>(
         env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeMemory<'local>,
+        _this: JWasmtimeLocalMemory<'local>,
         instance: InstanceHandle,
         store: StoreHandle,
         name: ::jni::objects::JString<'local>,
