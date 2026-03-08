@@ -1,9 +1,10 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.logging.log4j.LogManager;
@@ -27,7 +28,14 @@ public class WasiThreadContext implements WasmContext {
 
     private final WasmtimeEngine engine;
     private final WasmtimeModule module;
-    private final List<WasmContext> contexts = new CopyOnWriteArrayList<>();
+    private final WasmtimeSharedMemory sharedMemory;
+
+    /**
+     * WasmContext to use for threads
+     * <br>
+     * Thread safety: Read-only after start
+     */
+    private final List<WasmContext> threadContexts = new ArrayList<>();
 
     /**
      * Generator for thread IDs.
@@ -37,27 +45,28 @@ public class WasiThreadContext implements WasmContext {
     /**
      * Creates a new WasiThreadContext.
      * 
-     * @param engine           The engine to use for creating new stores and
-     *                         linkers.
-     * @param module           The module to re-instantiate in new threads.
-     * @param initialContexts  The initial list of contexts to be linked in new
-     *                         threads.
+     * @param engine          The engine to use for creating new stores and
+     *                        linkers.
+     * @param module          The module to re-instantiate in new threads.
+     * @param sharedMemory    The shared memory to link to new threads.
+     * @param initialContexts The initial list of contexts to be linked in new
+     *                        threads.
      */
-    public WasiThreadContext(WasmtimeEngine engine, WasmtimeModule module, List<WasmContext> initialContexts) {
+    public WasiThreadContext(WasmtimeEngine engine, WasmtimeModule module, WasmtimeSharedMemory sharedMemory,
+            List<WasmContext> initialContexts) {
         this.engine = engine;
         this.module = module;
+        this.sharedMemory = sharedMemory;
         if (initialContexts != null) {
-            this.contexts.addAll(initialContexts);
+            this.threadContexts.addAll(initialContexts);
         }
+        // Add itself to geht other threads to start other threads themselves
+        this.threadContexts.add(this);
     }
 
-    /**
-     * Adds a context to be linked in new threads.
-     * 
-     * @param context The context to add.
-     */
-    public void addContext(WasmContext context) {
-        this.contexts.add(context);
+    @Override
+    public List<Importmemory> getMemories() {
+        return List.of(new Importmemory("env", "memory", sharedMemory));
     }
 
     @Override
@@ -65,35 +74,45 @@ public class WasiThreadContext implements WasmContext {
         List<ImportFunction> result = new ArrayList<>();
         result.add(new ImportFunction(WASI_THREADS_MODULE, "thread_spawn",
                 List.of(ValType.I32),
-                List.of(ValType.I32), (WasmtimeInstance instance, Map<String, Object> context, long[] args) -> {
-                    final int arg = (int) args[0];
-                    final int tid = nextTid.getAndIncrement();
-
-                    final Thread thread = new Thread(() -> {
-                        try (WasmtimeStore threadStore = new WasmtimeStore(engine);
-                                WasmtimeLinker threadLinker = new WasmtimeLinker(engine, threadStore)) {
-                            // Link all contexts to the new linker
-                            for (WasmContext ctx : contexts) {
-                                threadLinker.link(ctx);
-                            }
-
-                            try (WasmtimeInstance threadInstance = new WasmtimeInstance(threadStore,
-                                    module,
-                                    threadLinker)) {
-                                threadInstance.invoke("wasi_thread_start", List.of((long) tid, (long) arg));
-                            } catch (Exception e) {
-                                LOGGER.error("Error in wasi-thread start", e);
-                            }
-                        } catch (Exception e) {
-                            LOGGER.error("Error setting up wasi-thread", e);
-                        }
-                    });
-                    thread.start();
-
-                    return new long[] { tid };
-                }));
-
+                List.of(ValType.I32), this::spawnThread));
+        result.add(new ImportFunction("wasi", "thread-spawn",
+                List.of(ValType.I32),
+                List.of(ValType.I32), this::spawnThread));
         return result;
     }
 
+    private long[] spawnThread(WasmtimeInstance instance, Map<String, Object> context, long[] args) {
+        final int arg = (int) args[0];
+        final int tid = nextTid.getAndIncrement();
+
+        final Thread thread = new Thread(() -> {
+            // Create a copy of the context map (to ensure both maps have independent
+            // __instance entries)
+            try (WasmtimeStore threadStore = new WasmtimeStore(engine, new HashMap<>(context));
+                    WasmtimeLinker threadLinker = new WasmtimeLinker(engine, threadStore)) {
+
+                // Link all contexts to the new linker
+                for (WasmContext ctx : threadContexts) {
+                    threadLinker.link(ctx);
+                }
+
+                // Link the shared memory
+                threadLinker.defineSharedMemory("env", "memory", sharedMemory);
+
+                try (WasmtimeInstance threadInstance = new WasmtimeInstance(threadStore,
+                        module,
+                        threadLinker)) {
+                    threadInstance.invoke("wasi_thread_start", List.of((long) tid, (long) arg));
+                } catch (Exception e) {
+                    LOGGER.error("Error in wasi-thread start", e);
+                }
+            } catch (Exception e) {
+                LOGGER.error("Error setting up wasi-thread", e);
+            }
+        });
+        thread.start();
+
+        return new long[] { tid };
+
+    }
 }

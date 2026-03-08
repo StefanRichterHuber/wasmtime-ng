@@ -4,6 +4,7 @@
         "./src/main/rust/wasmtime-binding/Cargo.toml",
         "./src/test/rust/wasip1sockettest/Cargo.toml",
         "./src/test/rust/wasip1test/Cargo.toml",
-        "./src/test/rust/wasip1filetest/Cargo.toml"
+        "./src/test/rust/wasip1filetest/Cargo.toml",
+        "./src/test/rust/wasip1threadtest/Cargo.toml"
     ]
 }

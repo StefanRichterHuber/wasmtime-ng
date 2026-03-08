@@ -1,0 +1,81 @@
+package io.github.stefanrichterhuber.wasmtimejavang;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+/**
+ * Represents a shared WebAssembly linear memory.
+ * Shared memory can be shared across multiple instances and stores.
+ * This class provides methods to read from and write to the WASM memory
+ * from the host Java application.
+ */
+public final class WasmtimeSharedMemory extends AbstractWasmtimeMemory implements AutoCloseable {
+    private final WasmtimeEngine engine;
+    private long sharedMemoryPtr;
+    private ByteBuffer buffer;
+
+    private native long createSharedMemory(long enginePtr, long initialPages, long maxPages);
+
+    private native void closeSharedMemory(long sharedMemoryPtr);
+
+    private native ByteBuffer getDirectBuffer(long sharedMemoryPtr);
+
+    private native long getMemorySize(long sharedMemoryPtr);
+
+    private native void growMemory(long sharedMemoryPtr, long delta);
+
+    /**
+     * Creates a new WasmtimeSharedMemory.
+     * 
+     * @param engine       The engine to associate with this memory.
+     * @param initialPages Initial number of pages (64KiB each).
+     * @param maxPages     Maximum number of pages.
+     */
+    public WasmtimeSharedMemory(WasmtimeEngine engine, long initialPages, long maxPages) {
+        this.engine = engine;
+        this.sharedMemoryPtr = createSharedMemory(engine.getEnginePtr(), initialPages, maxPages);
+
+    }
+
+    /**
+     * Returns the native pointer to the shared memory.
+     * 
+     * @return The native shared memory pointer.
+     */
+    long getSharedMemoryPtr() {
+        return this.sharedMemoryPtr;
+    }
+
+    /**
+     * Returns a ByteBuffer view of the WASM memory.
+     * 
+     * @return A ByteBuffer mapping the WASM memory.
+     */
+    public ByteBuffer buffer() {
+        final long currentSize = getMemorySize(sharedMemoryPtr);
+        if (buffer == null || buffer.capacity() != currentSize) {
+            buffer = getDirectBuffer(sharedMemoryPtr);
+            buffer.order(ByteOrder.LITTLE_ENDIAN);
+        }
+        return buffer;
+    }
+
+    /**
+     * Grows the memory by the specified number of pages.
+     * 
+     * @param delta The number of pages to add.
+     */
+    public void grow(long delta) {
+        growMemory(sharedMemoryPtr, delta);
+        // Invalidate buffer to force refresh on next access
+        this.buffer = null;
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (sharedMemoryPtr != 0) {
+            closeSharedMemory(sharedMemoryPtr);
+        }
+        sharedMemoryPtr = 0;
+    }
+}

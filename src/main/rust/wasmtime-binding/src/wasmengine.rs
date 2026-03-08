@@ -67,6 +67,7 @@ impl JWasmtimeEngineNativeInterface for JWasmtimeEngineAPI {
         let mut config = wasmtime::Config::new();
         config.wasm_threads(true);
         config.wasm_bulk_memory(true);
+        config.shared_memory(true);
 
         let engine = Engine::new(&config).unwrap();
         let result = EngineHandle::new(engine);

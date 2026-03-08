@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.DirectoryWasiFileDescriptor;
@@ -55,36 +56,50 @@ public class WasiPI1Context implements WasmContext {
 
     /**
      * Environment variables passed to the WASM module.
+     * <br>
+     * Thread safety: Read-only after start
      */
     private final Map<String, String> env = new HashMap<>();
 
     /**
      * Command-line arguments passed to the WASM module.
+     * <br>
+     * Thread safety: Read-only after start
      */
     private final List<String> args = new ArrayList<>();
 
     /**
      * The clock used for time-related operations.
+     * <br>
+     * Thread safety: Read-only after start
      */
     private Clock clock = Clock.systemDefaultZone();
 
     /**
      * The input stream used for stdin (file descriptor 0).
+     * <br>
+     * Thread safety: Read-only after start
      */
     private InputStream stdin = new NoOpInputStream();
 
     /**
      * The output stream used for stdout (file descriptor 1).
+     * <br>
+     * Thread safety: Read-only after start
      */
     private OutputStream stdout = new NoOpOutputStream();
 
     /**
      * The output stream used for stderr (file descriptor 2).
+     * <br>
+     * Thread safety: Read-only after start
      */
     private OutputStream stderr = new NoOpOutputStream();
 
     /**
      * The random number generator used for random_get.
+     * <br>
+     * Thread safety: Read-only after start
      */
     private Random random = new Random();
 
@@ -92,16 +107,22 @@ public class WasiPI1Context implements WasmContext {
      * Maps directory paths within the WASM client to Path objects on the host
      * system.
      * Used for preopened directories.
+     * <br>
+     * Thread safety: Read-only after start
      */
     private Map<String, Path> pathMappings = new HashMap<>();
 
     /**
      * Open file descriptors.
+     * <br>
+     * Thread safety: Might be modified after start, when the app opens new files
      */
-    private final Map<Integer, WasiFileDescriptor> fds = new HashMap<>();
+    private final Map<Integer, WasiFileDescriptor> fds = new ConcurrentHashMap<>();
 
     /**
      * Generator for the next available file descriptor.
+     * <br>
+     * Thread safety: Might be modified after start, when the app opens new files
      */
     private final AtomicInteger nextFd = new AtomicInteger(3);
 
@@ -1223,6 +1244,11 @@ public class WasiPI1Context implements WasmContext {
                 }));
 
         return result;
+    }
+
+    @Override
+    public List<Importmemory> getMemories() {
+        return List.of();
     }
 
 }

@@ -178,9 +178,36 @@ try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix())) {
 
 ### WASI threads
 
-There is some preliminary support for WASI threads
+There is some preliminary support for WASI threads using the additional context `WasiThreadContext`.
 
+```java
+try (FileInputStream fis = new FileInputStream(wasmPath.toFile());
+        WasmtimeEngine engine = new WasmtimeEngine();
+        WasmtimeModule module = new WasmtimeModule(engine, fis);
+        WasmtimeStore store = new WasmtimeStore(engine);
+        WasmtimeLinker linker = new WasmtimeLinker(engine, store);
+        // A shared memory is necessary to share memory between threads
+        WasmtimeSharedMemory sharedMemory = new WasmtimeSharedMemory(engine, 2, 256)) {
 
+    WasiPI1Context wasiContext = new WasiPI1Context()
+            .withArguments(List.of("wasip1threadtest"))
+            .withStdOut(System.out)
+            .withStdErr(System.err);
+
+    WasiThreadContext threadContext = new WasiThreadContext(engine, module, sharedMemory, List.of(wasiContext));
+
+    linker.link(wasiContext);
+    linker.link(threadContext);
+
+    try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
+        instance.invoke("_start", List.of());
+    }
+
+    // Give some time for threads to finish and print
+    Thread.sleep(1000);
+}
+
+```
 
 ## Architecture
 

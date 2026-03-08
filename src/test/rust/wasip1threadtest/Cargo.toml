@@ -3,9 +3,5 @@ name = "wasip1threadtest"
 version = "0.1.0"
 edition = "2024"
 
-[lib]
-name = "wasip1threadtest"
-crate-type = ["cdylib"]
-
 [dependencies]
 wasi = "0.11"
