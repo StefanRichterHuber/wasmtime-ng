@@ -10,7 +10,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -43,8 +42,10 @@ public class WasmtimeWasiSocketTest {
                     // Give the WASM a moment to start and call sock_accept
                     Thread.sleep(500);
                     try (Socket socket = new Socket("localhost", port);
-                            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-                            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+                            BufferedWriter writer = new BufferedWriter(
+                                    new OutputStreamWriter(socket.getOutputStream()));
+                            BufferedReader reader = new BufferedReader(
+                                    new InputStreamReader(socket.getInputStream()))) {
 
                         writer.write("Hello from Java Client!");
                         writer.newLine();
@@ -59,7 +60,7 @@ public class WasmtimeWasiSocketTest {
 
             // Run the WASM module
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-                List<Object> result = instance.invoke("_start", List.of());
+                Object[] result = instance.invoke("_start");
                 assertNotNull(result);
             }
 

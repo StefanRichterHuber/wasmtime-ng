@@ -108,7 +108,7 @@ public class WasiThreadContext implements WasmContext {
                 try (WasmtimeInstance threadInstance = new WasmtimeInstance(threadStore,
                         module,
                         threadLinker)) {
-                    threadInstance.invoke("wasi_thread_start", List.of((long) tid, (long) arg));
+                    threadInstance.invoke("wasi_thread_start", new Object[] { Long.valueOf(tid), Long.valueOf(arg) });
                 } catch (Exception e) {
                     LOGGER.error("Error in wasi-thread start", e);
                 }

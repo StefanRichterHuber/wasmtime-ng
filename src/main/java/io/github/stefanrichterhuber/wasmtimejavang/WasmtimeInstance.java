@@ -1,7 +1,5 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
-import java.util.List;
-
 /**
  * Represents an instantiated WebAssembly module.
  * An instance contains the state of the WASM module and allows calling its
@@ -19,7 +17,7 @@ public final class WasmtimeInstance implements AutoCloseable {
 
     private native void closeInstance(long instancePtr, long storePtr);
 
-    private native List<Object> runWasmFunc(long storePtr, long instancePtr, String name, List<Object> params);
+    private native Object[] runWasmFunc(long storePtr, long instancePtr, String name, Object[] params);
 
     /**
      * Creates a new WasmtimeInstance.
@@ -63,7 +61,7 @@ public final class WasmtimeInstance implements AutoCloseable {
      * @param args The arguments to pass to the function.
      * @return A list of result values from the function call.
      */
-    public List<Object> invoke(String name, List<Object> args) {
+    public Object[] invoke(String name, Object... args) {
         return runWasmFunc(this.store.getStorePtr(), this.instancePtr, name, args);
     }
 

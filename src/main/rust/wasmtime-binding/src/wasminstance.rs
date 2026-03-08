@@ -3,7 +3,10 @@ use crate::wasmlinker::LinkerHandle;
 use crate::wasmmodule::ModuleHandle;
 use crate::wasmstore::StoreHandle;
 use jni::{
-    JValue, bind_java_type, jni_sig, jni_str, objects::JList, strings::JNIString, sys::jlong,
+    JValue, bind_java_type, jni_sig, jni_str,
+    objects::{JList, JObject, JObjectArray},
+    strings::JNIString,
+    sys::{jlong, jsize},
 };
 use log::{debug, error};
 use wasmtime::{Instance, Val};
@@ -58,7 +61,7 @@ bind_java_type! {
     native_methods {
         extern fn create_instance(module: ModuleHandle, store: StoreHandle, linker: LinkerHandle ) -> jlong,
         extern fn close_instance(instance: InstanceHandle, store: StoreHandle,),
-        extern fn run_wasm_func(store: StoreHandle, instance: InstanceHandle, name: JString, parameters: JList) -> JList,
+        extern fn run_wasm_func(store: StoreHandle, instance: InstanceHandle, name: JString, parameters: JObject[]) -> JObject[],
     }
 }
 
@@ -86,8 +89,8 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         store: StoreHandle,
         instance: InstanceHandle,
         name: ::jni::objects::JString<'local>,
-        parameters: ::jni::objects::JList<'local>,
-    ) -> ::std::result::Result<::jni::objects::JList<'local>, Self::Error> {
+        parameters: ::jni::objects::JObjectArray<'local>,
+    ) -> ::std::result::Result<::jni::objects::JObjectArray<'local>, Self::Error> {
         let instance = unsafe { instance.as_ref() };
         let name = name.to_string();
         let s = unsafe { store.as_ref() };
@@ -99,7 +102,8 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
                 let result_types: Vec<wasmtime::ValType> = func.ty(&mut *s).results().collect();
                 let args = convert_val_list_to_vec(env, parameters, &param_types)?;
 
-                let mut results = vec![Val::I64(0); result_types.len()];
+                let result_len = result_types.len();
+                let mut results = vec![Val::I64(0); result_len];
                 match func.call(unsafe { store.as_ref() }, &args, &mut results) {
                     Ok(()) => {
                         debug!("Successfully called function {}", name);
@@ -107,7 +111,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
                     }
                     Err(e) => {
                         handle_wasmtime_error(env, e)?;
-                        empty_list(env)?
+                        empty_array(env, result_len.try_into().unwrap())?
                     }
                 }
             }
@@ -115,7 +119,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
                 let msg = format!("No function found with name {}", name);
                 let msg = JNIString::from(msg);
                 env.throw_new(jni_str!("java/lang/RuntimeException"), msg)?;
-                empty_list(env)?
+                empty_array(env, 0)?
             }
         };
         Ok(result)
@@ -169,20 +173,27 @@ pub fn empty_list<'local>(
     Ok(list_obj)
 }
 
+pub fn empty_array<'local>(
+    env: &mut ::jni::Env<'local>,
+    len: jsize,
+) -> Result<JObjectArray<'local>, jni::errors::Error> {
+    let array = env.new_object_array(len, jni_str!("java.lang.Number"), JObject::null())?;
+    Ok(array)
+}
+
 pub fn convert_val_vec_to_list<'local>(
     env: &mut ::jni::Env<'local>,
     values: &[Val],
-) -> Result<JList<'local>, jni::errors::Error> {
+) -> Result<JObjectArray<'local>, jni::errors::Error> {
     let len = values.len();
-    let list_class = env.find_class(jni_str!("java/util/ArrayList"))?;
-    let list_obj = env.new_object(
-        list_class,
-        &jni_sig!((jint) -> void),
-        &[JValue::Int(len.try_into().unwrap())],
-    )?;
-    let list_obj = JList::cast_local(env, list_obj)?;
 
-    for v in values.iter() {
+    let array = env.new_object_array(
+        len.try_into().unwrap(),
+        jni_str!("java.lang.Number"),
+        JObject::null(),
+    )?;
+
+    for (index, v) in values.iter().enumerate() {
         let obj: Option<jni::objects::JObject> = match v {
             Val::I32(v) => {
                 let class = env.find_class(jni_str!("java/lang/Integer"))?;
@@ -236,56 +247,26 @@ pub fn convert_val_vec_to_list<'local>(
         };
 
         if let Some(obj_ref) = obj {
-            env.call_method(
-                &list_obj,
-                jni_str!("add"),
-                jni_sig!( (java.lang.Object) -> jboolean),
-                &[JValue::Object(&obj_ref)],
-            )?;
+            array.set_element(env, index, obj_ref)?;
+        } else {
+            array.set_element(env, index, JObject::null())?;
         }
     }
 
-    Ok(list_obj)
+    Ok(array)
 }
 
 pub fn convert_val_list_to_vec<'local>(
     env: &mut ::jni::Env<'local>,
-    values: JList,
+    values: JObjectArray,
     param_types: &[wasmtime::ValType],
 ) -> Result<Vec<Val>, jni::errors::Error> {
-    let iterator = env
-        .call_method(
-            values,
-            jni_str!("iterator"),
-            jni_sig!( () -> java.util.Iterator),
-            &[],
-        )?
-        .l()?;
+    let array_len = values.len(env)?;
 
     let mut result = Vec::new();
-    let mut i = 0;
-
-    // Call the iterator on the list to fetch each value
-    while env
-        .call_method(
-            &iterator,
-            jni_str!("hasNext"),
-            jni_sig!( () -> jboolean),
-            &[],
-        )?
-        .z()?
-    {
-        let item = env
-            .call_method(
-                &iterator,
-                jni_str!("next"),
-                jni_sig!( () -> java.lang.Object),
-                &[],
-            )?
-            .l()?;
-
-        let val_type = param_types.get(i).unwrap_or(&wasmtime::ValType::I64);
-
+    for index in 0..array_len {
+        let item = values.get_element(env, index)?;
+        let val_type = param_types.get(index).unwrap_or(&wasmtime::ValType::I64);
         let val = match val_type {
             wasmtime::ValType::I32 => {
                 let v = env
@@ -318,10 +299,7 @@ pub fn convert_val_list_to_vec<'local>(
                 Val::I64(v)
             }
         };
-
         result.push(val);
-        i += 1;
     }
-
     Ok(result)
 }
