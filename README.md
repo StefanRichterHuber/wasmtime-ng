@@ -45,13 +45,13 @@ mvn -P release,build-linux-x86-64,build-linux-aarch64,build-windows-x86_64 clean
 
 ## Usage
 
-Include the dependency into your project `pom.xml` (not yet published on maven central): 
+Include the dependency into your project `pom.xml` (the published artifact contains native libraries for Linux x86_64, Linux aarch64 and Windows x86_64): 
 
 ```xml
 <dependency>
     <groupId>io.github.stefanrichterhuber</groupId>
     <artifactId>wasmtimejavang</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>[Current Version]</version>
 </dependency>
 ```
 
