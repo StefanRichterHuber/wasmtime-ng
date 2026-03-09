@@ -29,6 +29,9 @@ impl StoreContent {
 #[derive(Copy, Clone)]
 pub struct StoreHandle(*mut Store<StoreContent>);
 
+unsafe impl Send for StoreHandle {}
+unsafe impl Sync for StoreHandle {}
+
 impl StoreHandle {
     pub fn new(store: Store<StoreContent>) -> Self {
         let boxed = Box::new(store);

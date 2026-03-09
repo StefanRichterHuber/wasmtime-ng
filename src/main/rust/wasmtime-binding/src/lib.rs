@@ -6,3 +6,4 @@ pub mod wasmmemory;
 pub mod wasmmodule;
 pub mod wasmsharedmemory;
 pub mod wasmstore;
+pub mod wasmtimefunc;

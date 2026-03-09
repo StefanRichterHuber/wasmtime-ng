@@ -33,6 +33,11 @@ public interface WasmContext {
      */
     List<ImportFunction> getImportFunctions();
 
+    /**
+     * Returns the list of (shared) Memories provided by this context
+     * 
+     * @return A list of ImportMemory objects
+     */
     List<Importmemory> getMemories();
 
 }

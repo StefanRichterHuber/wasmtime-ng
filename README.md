@@ -87,6 +87,20 @@ try (
 }
 ```
 
+### Supported WASM Types
+
+All type conversions are bi-directional if not mentioned otherwise.
+
+| wasm type | Java type | Comment |
+| :---      | :---      | :---:   |
+| I32 | java.lang.Integer |  |
+| I64 | java.lang.Long | |
+| F32 | java.lang.Float || 
+| F64 | java.lang.Double | |
+| V128 | io.github.stefanrichterhuber.wasmtimejavang.V128 | V128 is a wrapper around byte[16] |
+| FuncRef |  io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction | Callable function reference. Currently only supported wasm -> java |
+| ExternRef | any java object | Any java object can be passed through the wasm runtime as extern ref |
+
 ### Memory Interaction
 The `WasmtimeMemory` class provides efficient access to the WASM linear memory by mapping it directly to a `java.nio.ByteBuffer`.
 

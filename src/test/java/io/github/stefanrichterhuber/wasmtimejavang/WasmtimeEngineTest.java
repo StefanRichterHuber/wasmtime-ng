@@ -76,7 +76,7 @@ public class WasmtimeEngineTest {
                 WasmtimeLinker linker = new WasmtimeLinker(engine, store);) {
 
             linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
-                return new long[] { 0 };
+                return new Object[] { 0 };
             });
         }
     }
@@ -93,7 +93,7 @@ public class WasmtimeEngineTest {
             // Add a java native function which the wasm runtime can call
             linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
                 LOGGER.info("Function env::hello called");
-                return new long[] { 0 };
+                return new Object[] { 0 };
             });
 
             // Call the exported function 'run'
@@ -115,11 +115,38 @@ public class WasmtimeEngineTest {
             store.getContext().put("greeting", "Hello world");
             linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
                 LOGGER.info("Function env::hello called with greeting: " + context.get("greeting"));
-                return new long[] {};
+                return new Object[] {};
             });
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
                 Object[] result = instance.invoke("run");
+                assertNotNull(result);
+            }
+
+        }
+    }
+
+    /**
+     * One can get any exported function as WasmtimeFunction object
+     */
+    @Test
+    public void testExportFunction() throws Exception {
+        try (
+                WasmtimeEngine engine = new WasmtimeEngine();
+                WasmtimeModule module = new WasmtimeModule(engine, wat);
+                WasmtimeStore store = new WasmtimeStore(engine);
+                WasmtimeLinker linker = new WasmtimeLinker(engine, store);
+
+        ) {
+            store.getContext().put("greeting", "Hello world");
+            linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
+                LOGGER.info("Function env::hello called with greeting: " + context.get("greeting"));
+                return new Object[] {};
+            });
+
+            try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
+                WasmtimeFunction f = instance.getFunction("run");
+                Object[] result = f.call(instance, store.getContext());
                 assertNotNull(result);
             }
 

@@ -8,6 +8,8 @@ public enum ValType {
     I32,
     /** 64-bit integer */
     I64,
+    /** 32-bit float */
+    F32,
     /** 64-bit float */
     F64,
     /** 128-bit vector */

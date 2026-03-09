@@ -19,6 +19,8 @@ public final class WasmtimeInstance implements AutoCloseable {
 
     private native Object[] runWasmFunc(long storePtr, long instancePtr, String name, Object[] params);
 
+    private native WasmtimeFunction getFunctionReference(long storePtr, long instancePtr, String name);
+
     /**
      * Creates a new WasmtimeInstance.
      * 
@@ -63,6 +65,16 @@ public final class WasmtimeInstance implements AutoCloseable {
      */
     public Object[] invoke(String name, Object... args) {
         return runWasmFunc(this.store.getStorePtr(), this.instancePtr, name, args);
+    }
+
+    /**
+     * Returns a callable reference to any exported wasm function
+     * 
+     * @param name Name of the exported function
+     * @return WasmFunction if present, or null if not
+     */
+    public WasmtimeFunction getFunction(String name) {
+        return getFunctionReference(getStore().getStorePtr(), getInstancePtr(), name);
     }
 
     /**
