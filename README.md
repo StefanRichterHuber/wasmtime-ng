@@ -4,7 +4,7 @@
 
 > **Disclaimer:** This project is an independent community effort and is not affiliated with, maintained, or endorsed by the original [Wasmtime project](https://github.com/bytecodealliance/wasmtime) or the Bytecode Alliance.
 
-Wasmtime-java-ng provides Java bindings for [Wasmtime](https://github.com/bytecodealliance/wasmtime), a fast, secure, and highly configurable WebAssembly runtime. 
+Wasmtime-java-ng provides Java bindings for [Wasmtime](https://github.com/bytecodealliance/wasmtime), a fast, secure, and highly configurable WebAssembly runtime.
 
 This project allows Java applications to execute WebAssembly modules, interact with linear memory, and leverage the WebAssembly System Interface (WASI) through a native bridge built on Rust.
 
@@ -25,6 +25,7 @@ mvn clean install
 ```
 
 ### Multi-Platform Builds
+
 By default, only the native library for Linux x86_64 is built. You can target specific platforms using Maven profiles:
 
 * `build-linux-x86-64`: Linux x86_64
@@ -45,7 +46,7 @@ mvn -P release,build-linux-x86-64,build-linux-aarch64,build-windows-x86_64 clean
 
 ## Usage
 
-Include the dependency into your project `pom.xml` (the published artifact contains native libraries for Linux x86_64, Linux aarch64 and Windows x86_64): 
+Include the dependency into your project `pom.xml` (the published artifact contains native libraries for Linux x86_64, Linux aarch64 and Windows x86_64):
 
 ```xml
 <dependency>
@@ -78,11 +79,11 @@ try (
     // Define a Java function for the WASM module to call
     linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
         System.out.println("Java side: " + context.get("greeting"));
-        return new long[] {};
+        return new Object[] {};
     });
 
     try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-        instance.invoke("run", List.of());
+        instance.invoke("run");
     }
 }
 ```
@@ -91,17 +92,18 @@ try (
 
 All type conversions are bi-directional if not mentioned otherwise.
 
-| wasm type | Java type | Comment |
-| :---      | :---      | :---:   |
-| I32 | java.lang.Integer |  |
-| I64 | java.lang.Long | |
-| F32 | java.lang.Float || 
-| F64 | java.lang.Double | |
-| V128 | io.github.stefanrichterhuber.wasmtimejavang.V128 | V128 is a wrapper around byte[16] |
-| FuncRef |  io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction | Callable function reference. Currently only supported wasm -> java |
-| ExternRef | any java object | Any java object can be passed through the wasm runtime as extern ref |
+| Wasm type | Java type | Comment |
+| :--- | :--- | :---: |
+| **`I32`** | `java.lang.Integer` | Numbers are always boxed |
+| **`I64`** | `java.lang.Long` | Numbers are always boxed |
+| **`F32`** | `java.lang.Float` | Numbers are always boxed |
+| **`F64`** | `java.lang.Double` | Numbers are always boxed |
+| **`V128`** | `io.github.stefanrichterhuber.wasmtimejavang.V128` | V128 is a wrapper around `byte[16]`. Build in conversion from /to `byte[]`, `short[]` and `long[]` |
+| **`FuncRef`** | `io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction` | Callable function reference. Currently export from wasm to java supported |
+| **`ExternRef`** | any java object | Any java object can be passed through the wasm runtime as extern ref |
 
 ### Memory Interaction
+
 The `WasmtimeMemory` class provides efficient access to the WASM linear memory by mapping it directly to a `java.nio.ByteBuffer`.
 
 ```java
@@ -114,8 +116,8 @@ try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
     // Write a single byte to offset 0x1003
     mem.write(0x1003, (byte) 5);
 
-    // Higher level memory interactions. Usually use some kind of native alloc /
-    // dealloc allocate memory locations prior to use
+    // Higher level memory interactions. Usually one would call some kind of native alloc
+    // function to allocate memory locations prior to use
     mem.writeCString(0x1000, "Hello", StandardCharsets.UTF_8);
     assertEquals("Hello", mem.readCString(0x1000, StandardCharsets.UTF_8));
 
@@ -136,7 +138,6 @@ try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
 
     // Grow to memory to have another page
     mem.grow(1);
-
 }
 ```
 
@@ -160,7 +161,7 @@ try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix())) {
     linker.link(wasi);
     
     try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-        instance.invoke("_start", List.of());
+        instance.invoke("_start");
     }
 }
 ```
@@ -181,6 +182,7 @@ try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix())) {
 | **Polling** | `poll_oneoff` | 🟡 | Clock events supported |
 
 ### Configuration Options
+
 `WasiPI1Context` provides a fluent API for resource virtualization:
 
 * **Standard I/O**: `withStdIn(InputStream)`, `withStdOut(OutputStream)`, `withStdErr(OutputStream)`.
@@ -228,11 +230,12 @@ try (FileInputStream fis = new FileInputStream(wasmPath.toFile());
 The project is structured into three distinct layers:
 
 1. **Java API**: A type-safe wrapper that represents Wasmtime concepts (Engine, Module, Store, Instance) in Java. It uses `jar-jni` for automatic native library loading. Log4j2 is used as logging framework.
-2. **JNI Layer (Rust)**: Built using the [jni-rs](https://crates.io/crates/jni) crate. It manages the lifecycle of native Wasmtime objects and facilitates high-performance data exchange between the JVM and Rust. This layer also redirects Rust `log` crate output to Java's Log4j2. "Classic" Java JNI was preferred over the newer "Foreign Function and Memory API", due to the native library is only planned to be used with Java so it could be tailored to its use. This allows more direct Rust - Java interactions like easily calling Java methods on objects or even create new Java objects using their constructor. A "Foreign Function an Memory API" approach would have resulted in a thinner native layer with far higher implementation effort on the Java side for all the type conversion, especially sacrificing the type and lifetime safety the current rust layer provides for the runtime. 
+2. **JNI Layer (Rust)**: Built using the [jni-rs](https://crates.io/crates/jni) crate. It manages the lifecycle of native Wasmtime objects and facilitates data exchange between the JVM and Rust. This layer also redirects Rust `log` crate output to Java's Log4j2. "Classic" Java JNI was preferred over the newer "Foreign Function and Memory API", due to the native library is only planned to be used with Java so it could be tailored to its use. This allows more direct Rust - Java interactions like easily calling Java methods on objects or even create new Java objects using their constructor. A "Foreign Function an Memory API" approach would have resulted in a thinner native layer with far higher implementation effort on the Java side for all the type conversion, especially sacrificing the type and lifetime safety the current rust layer provides for the runtime.
 3. **Wasmtime Core**: The underlying [wasmtime](https://crates.io/crates/wasmtime) Rust crate.
 
 ## Comparison to Previous Work
 
 This implementation aims to be more maintainable and feature-complete than earlier attempts:
+
 * [bluejekyll/wasmtime-java](https://github.com/bluejekyll/wasmtime-java)
 * [kawamuray/wasmtime-java](https://github.com/kawamuray/wasmtime-java)
