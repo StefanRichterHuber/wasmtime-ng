@@ -24,11 +24,6 @@ public class WasiThreadContext implements WasmContext {
      */
     private static final String STD_MEMORY = "memory";
 
-    /**
-     * Wasm module for thread support
-     */
-    private static final String WASI_THREADS_MODULE = "wasi_threads";
-
     private final WasmtimeEngine engine;
     private final WasmtimeModule module;
     private final WasmtimeSharedMemory sharedMemory;
@@ -75,7 +70,7 @@ public class WasiThreadContext implements WasmContext {
     @Override
     public List<ImportFunction> getImportFunctions() {
         List<ImportFunction> result = new ArrayList<>();
-        result.add(new ImportFunction(WASI_THREADS_MODULE, "thread_spawn",
+        result.add(new ImportFunction("wasi_threads", "thread_spawn",
                 List.of(ValType.I32),
                 List.of(ValType.I32), this::spawnThread));
         result.add(new ImportFunction("wasi", "thread-spawn",
@@ -84,7 +79,17 @@ public class WasiThreadContext implements WasmContext {
         return result;
     }
 
-    private long[] spawnThread(WasmtimeInstance instance, Map<String, Object> context, long[] args) {
+    /**
+     * Creates a new WasmtimeStore, a WasmtimeLinker with a copy of the current
+     * contexts and memoryies and a new WasmtimeInstance and starts a new Java
+     * thread with this instance.
+     * 
+     * @param instance Instance requesting the thread
+     * @param context  Context Map (shared with the new instance)
+     * @param args     Call args (contains the single argument for new thread)
+     * @return Thread id
+     */
+    private Object[] spawnThread(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
         final int arg = (int) args[0];
         final int tid = nextTid.getAndIncrement();
 
@@ -118,7 +123,7 @@ public class WasiThreadContext implements WasmContext {
         });
         thread.start();
 
-        return new long[] { tid };
+        return new Object[] { tid };
 
     }
 }

@@ -1,13 +1,15 @@
+use crate::wasminstance::{convert_java_array_to_val_vector, convert_val_vector_to_java_array};
 use crate::wasmsharedmemory::SharedMemoryHandle;
 use crate::wasmstore::StoreHandle;
 use crate::{wasmengine::EngineHandle, wasmstore::StoreContent};
+use jni::objects::JObjectArray;
 use jni::{
     JValue, bind_java_type, jni_sig, jni_str,
-    objects::{JList, JLongArray, JObject, JString},
+    objects::{JList, JObject, JString},
     sys::jlong,
 };
 use log::{debug, error};
-use wasmtime::{Func, FuncType, Linker, Val, ValType};
+use wasmtime::{Func, FuncType, Linker, RefType, ValType};
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
@@ -108,8 +110,7 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
             "Defining function: {}::{}({:?}) -> {:?}",
             module, name, params, results
         );
-        let results_types = results.clone();
-        let signature = FuncType::new(unsafe { engine.as_ref() }, params, results);
+        let signature = FuncType::new(unsafe { engine.as_ref() }, params, results.clone());
 
         // Create a global reference to the function
         let func = env.new_global_ref(func)?;
@@ -120,7 +121,7 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
             signature,
             move |caller, args, returns| {
                 debug!("Dynamic call of triggered with {} arguments!", args.len());
-                let result: std::result::Result<Vec<i64>, jni::errors::Error> = jvm
+                let result: std::result::Result<Vec<wasmtime::Val>, jni::errors::Error> = jvm
                     .attach_current_thread(|env| {
                         // We need to the the instance object from the store map
                         let java_map = &caller.data().context;
@@ -132,49 +133,31 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                                 },
                         };
 
-                        // Convert the args to a JLongArray
-                        let args_array = env.new_long_array(args.len())?;
-
-                        let mut args_values = Vec::with_capacity(args.len());
-                        for arg in args.iter() {
-                            match arg {
-                                Val::I32(v) => args_values.push(*v as jlong),
-                                Val::I64(v) => args_values.push(*v),
-                                _ => debug!("  Arg [{:?}]: Other type", arg),
-                            }
-                        }
-                        args_array.set_region(env, 0, args_values.as_slice())?;
+                        // Convert the args to a JObjectArray
+                        let args_array = convert_val_vector_to_java_array(env, store,args)?;
                         let call_result = env.call_method(
                             &func,
                             jni_str!("call"),
-                            jni_sig!( ( io.github.stefanrichterhuber.wasmtimejavang.WasmtimeInstance, java.util.Map, jlong[]) -> jlong[]),
+                            jni_sig!( ( io.github.stefanrichterhuber.wasmtimejavang.WasmtimeInstance, java.util.Map, JObject[]) -> JObject[]),
                             &[JValue::Object(&instance_obj),JValue::Object(java_map), JValue::Object(&args_array)],
                         )?;
 
                         env.exception_catch()?;
                         let result = call_result.l()?;
-                        let result_array = JLongArray::cast_local(env, result)?;
+                        let result_array = JObjectArray::<JObject>::cast_local(env, result)?;
 
-                        let result_array_len = result_array.len(env)?;
-                        let mut buffer = vec![0i64; result_array_len as usize];
-                        result_array.get_region(env, 0, &mut buffer)?;
+                        let result = convert_java_array_to_val_vector(env, store, result_array,&results)?;
 
-                        debug!("Dynamic call was successfull: {:?}", buffer);
+                        debug!("Dynamic call was successfull: {:?}", result);
 
-                        Ok(buffer)
+                        Ok(result)
                     });
 
                 match result {
                     Ok(values) => {
                         for (i, v) in values.iter().enumerate() {
                             if i < returns.len() {
-                                match results_types[i] {
-                                    ValType::I32 => returns[i] = Val::I32(*v as i32),
-                                    ValType::I64 => returns[i] = Val::I64(*v),
-                                    ValType::F32 => returns[i] = Val::F32((*v as f32).to_bits()),
-                                    ValType::F64 => returns[i] = Val::F64((*v as f64).to_bits()),
-                                    _ => returns[i] = Val::I64(*v),
-                                }
+                                returns[i] = *v;
                             }
                         }
                         Ok(())
@@ -223,7 +206,12 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
     }
 }
 
-fn convert_jvm_error_to_wasmtime_error(jvm_error: jni::errors::Error) -> wasmtime::error::Error {
+///
+/// Converts jni::errors::Error to wasmtime::error:Error
+///
+pub fn convert_jvm_error_to_wasmtime_error(
+    jvm_error: jni::errors::Error,
+) -> wasmtime::error::Error {
     let mut result = wasmtime::error::Error::msg(jvm_error.to_string());
 
     match jvm_error {
@@ -236,6 +224,9 @@ fn convert_jvm_error_to_wasmtime_error(jvm_error: jni::errors::Error) -> wasmtim
     result
 }
 
+///
+/// Converts the list of java ValType enums to a vec of rust ValTyp enums
+///
 fn convert_val_type_enum_list_to_vec<'local>(
     env: &mut ::jni::Env<'local>,
     values: JList,
@@ -286,8 +277,10 @@ fn convert_val_type_enum_list_to_vec<'local>(
         let value: ValType = match enum_value_name.as_str() {
             "I32" => ValType::I32,
             "I64" => ValType::I64,
+            "F32" => ValType::F32,
             "F64" => ValType::F64,
             "V128" => ValType::V128,
+            "Ref" => ValType::Ref(RefType::EXTERNREF),
             _ => ValType::I32,
         };
 

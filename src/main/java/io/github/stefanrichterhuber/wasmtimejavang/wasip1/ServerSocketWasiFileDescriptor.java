@@ -33,11 +33,14 @@ public class ServerSocketWasiFileDescriptor extends WasiFileDescriptor {
     public int sock_accept(int flags, int fd_ptr, WasmtimeMemory memory) {
         try {
             Socket client = serverSocket.accept();
+            @SuppressWarnings("unused")
             WasiFileDescriptor clientFd = socketToFd.apply(client);
             // This is a bit tricky as the context needs to assign the FD number.
-            // We'll return the WasiFileDescriptor object and let the context handle the mapping.
+            // We'll return the WasiFileDescriptor object and let the context handle the
+            // mapping.
             // But WASI expects us to write the FD number into fd_ptr.
-            // We'll need to change how we handle sock_accept in the context to accommodate this.
+            // We'll need to change how we handle sock_accept in the context to accommodate
+            // this.
             throw new UnsupportedOperationException("sock_accept must be coordinated with WasiPI1Context");
         } catch (Exception e) {
             return WasiErrno.IO;
