@@ -24,12 +24,15 @@ public final class WasmtimeLinker implements AutoCloseable {
 
     private native void closeLinker(long linkerPtr);
 
-    private native void defineFunction(long enginePtr, long storePtr, long linkerPtr, WasmtimeFunction func,
+    private native void defineFunction(
+            long enginePtr, long storePtr, long linkerPtr,
+            WasmtimeFunction func,
             String module, String name,
-            List<ValType> params,
-            List<ValType> returnTypes);
+            List<ValType> params, List<ValType> returnTypes);
 
-    private native void defineMemory(long storePtr, long linkerPtr, long sharedMemoryPtr, String module, String name);
+    private native void defineMemory(
+            long storePtr, long linkerPtr, long sharedMemoryPtr,
+            String module, String name);
 
     /**
      * Closes the linker and releases native resources.

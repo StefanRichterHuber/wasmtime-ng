@@ -4,12 +4,12 @@ use crate::wasminstance::{
 use crate::wasmsharedmemory::SharedMemoryHandle;
 use crate::wasmstore::StoreHandle;
 use crate::wasmtime_valtype::convert_val_type_enum_list_to_vec;
+use crate::wasmtimefunction::JWasmtimeFunction;
 use crate::{
     wasmcontext::JWasmContext, wasmengine::EngineHandle, wasmengine::JWasmtimeEngine,
     wasmstore::JWasmtimeStore, wasmstore::StoreContent,
 };
-use jni::objects::JObjectArray;
-use jni::{JValue, bind_java_type, jni_sig, jni_str, objects::JObject, sys::jlong};
+use jni::{bind_java_type, sys::jlong};
 use log::{debug, error};
 use wasmtime::{Func, FuncType, Linker};
 
@@ -51,6 +51,7 @@ bind_java_type! {
         JWasmtimeEngine => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeEngine",
         JWasmtimeStore => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeStore",
         JWasmContext => "io.github.stefanrichterhuber.wasmtimejavang.WasmContext",
+        JWasmtimeFunction => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction",
     },
 
     fields = {
@@ -70,7 +71,15 @@ bind_java_type! {
     native_methods {
         extern fn create_linker(engine: EngineHandle) -> jlong,
         extern fn close_linker(linker: LinkerHandle),
-        extern fn define_function(engine: EngineHandle, store:StoreHandle, linker: LinkerHandle, func: io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction, module: JString, name: JString, parameters: JList, return_types: JList),
+        extern fn define_function(
+            engine: EngineHandle,
+            store: StoreHandle,
+            linker: LinkerHandle,
+            func: JWasmtimeFunction,
+            module: JString,
+            name: JString,
+            parameters: JList,
+            return_types: JList),
         extern fn define_memory(store: StoreHandle, linker: LinkerHandle, shared_memory: SharedMemoryHandle, module: JString, name: JString)
     }
 }
@@ -106,7 +115,7 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         engine: EngineHandle,
         store: StoreHandle,
         linker: LinkerHandle,
-        func: JObject,
+        func: JWasmtimeFunction,
         module: ::jni::objects::JString<'local>,
         name: ::jni::objects::JString<'local>,
         parameters: ::jni::objects::JList<'local>,
@@ -141,22 +150,13 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                             None =>  {
                                  error!("Field instance not found in store"); 
                                  return Err(jni::errors::Error::FieldNotFound { name: "instance".to_owned(), sig: "io/github/stefanrichterhuber/wasmtimejavang/WasmtimeInstance".to_owned() }); 
-                                },
+                            },
                         };
 
                         // Convert the args to a JObjectArray
                         let args_array = convert_val_vector_to_java_array(env, store,args)?;
-                        let call_result = env.call_method(
-                            &func,
-                            jni_str!("call"),
-                            jni_sig!( ( io.github.stefanrichterhuber.wasmtimejavang.WasmtimeInstance, java.util.Map, JObject[]) -> JObject[]),
-                            &[JValue::Object(&instance_obj),JValue::Object(java_map), JValue::Object(&args_array)],
-                        )?;
-
+                        let result_array = func.call(env, instance_obj, java_map, args_array)?;
                         env.exception_catch()?;
-                        let result = call_result.l()?;
-                        let result_array = JObjectArray::<JObject>::cast_local(env, result)?;
-
                         let result = convert_java_array_to_val_vector(env, store, result_array,&results)?;
 
                         debug!("Dynamic call was successfull: {:?}", result);
