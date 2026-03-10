@@ -1,6 +1,7 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
@@ -148,6 +149,30 @@ public class WasmtimeEngineTest {
                 WasmtimeFunction f = instance.getFunction("run");
                 Object[] result = f.call(instance, store.getContext());
                 assertNotNull(result);
+            }
+
+        }
+    }
+
+    @Test
+    public void testJavaExceptionFunction() throws Exception {
+        try (
+                WasmtimeEngine engine = new WasmtimeEngine();
+                WasmtimeModule module = new WasmtimeModule(engine, wat);
+                WasmtimeStore store = new WasmtimeStore(engine);
+                WasmtimeLinker linker = new WasmtimeLinker(engine, store);
+
+        ) {
+            linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
+                throw new IllegalStateException("This is a test exception");
+            });
+
+            try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
+                Object[] result = instance.invoke("run");
+                fail("Exception must be thrown");
+                assertNotNull(result);
+            } catch (RuntimeException e) {
+                // exception expected
             }
 
         }

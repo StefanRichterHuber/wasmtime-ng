@@ -1,4 +1,6 @@
-use crate::{wasmengine::EngineHandle, wasminstance::handle_wasmtime_error};
+use crate::{
+    wasmengine::EngineHandle, wasmengine::JWasmtimeEngine, wasminstance::handle_wasmtime_error,
+};
 use jni::{bind_java_type, sys::jlong};
 use log::debug;
 use wasmtime::Module;
@@ -30,16 +32,24 @@ impl From<ModuleHandle> for jlong {
 }
 
 bind_java_type! {
-    rust_type = JWasmtimeModule,
+    rust_type = pub JWasmtimeModule,
     java_type = "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeModule",
 
     type_map = {
         unsafe EngineHandle => long,
-        unsafe ModuleHandle => long
+        unsafe ModuleHandle => long,
+        JWasmtimeEngine => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeEngine"
+    },
+
+    fields = {
+        module_ptr: jlong,
+        engine: JWasmtimeEngine,
     },
 
     constructors {
-        fn new(engine: EngineHandle),
+        fn new_from_bytes(engine: JWasmtimeEngine, source: jbyte[]),
+        fn new_from_input_string(engine: JWasmtimeEngine, wat: JString),
+
     },
 
     native_methods {

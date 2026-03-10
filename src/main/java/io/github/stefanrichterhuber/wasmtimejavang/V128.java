@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
@@ -90,6 +91,35 @@ public final class V128 {
     }
 
     /**
+     * Constructs a V128 from a BigInteger. The BigInteger is treated as a 128-bit
+     * signed or unsigned integer.
+     * 
+     * @param value BigInteger value
+     */
+    public V128(final BigInteger value) {
+        if (value == null) {
+            throw new NullPointerException("value must not be null");
+        }
+        if (value.bitLength() > 128) {
+            throw new IllegalArgumentException("value must be at most 128 bits");
+        }
+        final byte[] bytes = value.toByteArray();
+        this.parts = new byte[16];
+        // BigInteger.toByteArray() returns big-endian.
+        // We want to store it as little-endian in parts.
+        final int n = Math.min(bytes.length, 16);
+        for (int i = 0; i < n; i++) {
+            this.parts[i] = bytes[bytes.length - 1 - i];
+        }
+        // Sign extension for negative numbers
+        if (value.signum() < 0) {
+            for (int i = n; i < 16; i++) {
+                this.parts[i] = (byte) 0xff;
+            }
+        }
+    }
+
+    /**
      * Converts this V128 into an array of 16 byte values
      * 
      * @return byte array
@@ -147,6 +177,20 @@ public final class V128 {
                 b.getLong(0 * Long.BYTES),
                 b.getLong(1 * Long.BYTES)
         };
+    }
+
+    /**
+     * Converts this V128 into a BigInteger. The bytes are treated as a 128-bit
+     * signed integer.
+     * 
+     * @return BigInteger
+     */
+    public BigInteger getBigInteger() {
+        final byte[] bigEndian = new byte[16];
+        for (int i = 0; i < 16; i++) {
+            bigEndian[i] = parts[15 - i];
+        }
+        return new BigInteger(bigEndian);
     }
 
     @Override

@@ -1,4 +1,4 @@
-use crate::wasmengine::EngineHandle;
+use crate::{wasmengine::EngineHandle, wasminstance::handle_wasmtime_error};
 use jni::{bind_java_type, sys::jlong};
 use log::debug;
 use wasmtime::{MemoryType, SharedMemory};
@@ -30,7 +30,7 @@ impl From<SharedMemoryHandle> for jlong {
 }
 
 bind_java_type! {
-    rust_type = JWasmtimeSharedMemory,
+    rust_type = pub JWasmtimeSharedMemory,
     java_type = "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeSharedMemory",
 
     type_map = {
@@ -103,13 +103,15 @@ impl JWasmtimeSharedMemoryNativeInterface for JWasmtimeSharedMemoryAPI {
     }
 
     fn grow_memory<'local>(
-        _env: &mut ::jni::Env<'local>,
+        env: &mut ::jni::Env<'local>,
         _this: JWasmtimeSharedMemory<'local>,
         shared_memory: SharedMemoryHandle,
         delta: ::jni::sys::jlong,
     ) -> ::std::result::Result<(), Self::Error> {
         let shared_memory = unsafe { shared_memory.as_ref() };
-        shared_memory.grow(delta as u64).unwrap();
-        Ok(())
+        match shared_memory.grow(delta as u64) {
+            Ok(_) => Ok(()),
+            Err(e) => handle_wasmtime_error(env, e),
+        }
     }
 }

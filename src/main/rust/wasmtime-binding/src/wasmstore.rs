@@ -1,10 +1,7 @@
-use crate::wasmengine::EngineHandle;
-use jni::{
-    bind_java_type,
-    objects::{JMap, JObject},
-    refs::Global,
-    sys::jlong,
+use crate::{
+    wasmengine::EngineHandle, wasmengine::JWasmtimeEngine, wasminstance::JWasmtimeInstance,
 };
+use jni::{bind_java_type, objects::JMap, refs::Global, sys::jlong};
 use log::debug;
 use wasmtime::Store;
 
@@ -13,7 +10,7 @@ use wasmtime::Store;
 ///
 pub struct StoreContent {
     pub context: Global<JMap<'static>>,
-    pub instance: Option<Global<JObject<'static>>>,
+    pub instance: Option<Global<JWasmtimeInstance<'static>>>,
 }
 
 impl StoreContent {
@@ -54,12 +51,18 @@ impl From<StoreHandle> for jlong {
 }
 
 bind_java_type! {
-    rust_type = JWasmtimeStore,
+    rust_type = pub JWasmtimeStore,
     java_type = "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeStore",
 
     type_map = {
         unsafe EngineHandle => long,
         unsafe StoreHandle => long,
+        JWasmtimeEngine => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeEngine",
+    },
+
+    fields {
+        store_ptr: jlong,
+        engine: JWasmtimeEngine,
     },
 
     constructors {

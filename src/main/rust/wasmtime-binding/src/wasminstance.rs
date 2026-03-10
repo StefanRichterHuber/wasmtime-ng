@@ -1,18 +1,29 @@
+use crate::java_numbers::JDouble;
+use crate::java_numbers::JFloat;
+use crate::java_numbers::JInteger;
+use crate::java_numbers::JLong;
+use crate::java_numbers::JNumber;
+use crate::wasmengine::EngineHandle;
+use crate::wasmlinker::JWasmtimeLinker;
 use crate::wasmlinker::LinkerHandle;
+use crate::wasmmemory::JWasmtimeLocalMemory;
+use crate::wasmmodule::JWasmtimeModule;
 use crate::wasmmodule::ModuleHandle;
+use crate::wasmstore::JWasmtimeStore;
 use crate::wasmstore::StoreHandle;
-use crate::{wasmengine::EngineHandle, wasmtimefunc::FuncHandle};
-use jni::objects::JPrimitiveArray;
+use crate::wasmtime_v128::JV128;
+use crate::wasmtimefuncref::JWasmtimeFuncRef;
+use crate::wasmtimefunction::JWasmtimeFunction;
 use jni::refs::Global;
-use jni::sys::jbyte;
 use jni::{
-    JValue, bind_java_type, jni_sig, jni_str,
+    bind_java_type, jni_str,
     objects::{JObject, JObjectArray},
     strings::JNIString,
     sys::{jlong, jsize},
 };
 use log::{debug, error, warn};
-use wasmtime::{ExternRef, Func, Instance, RefType, V128, Val};
+use wasmtime::ValType;
+use wasmtime::{ExternRef, Instance, RefType, Val};
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
@@ -41,7 +52,7 @@ impl From<InstanceHandle> for jlong {
 }
 
 bind_java_type! {
-    rust_type = JWasmtimeInstance,
+    rust_type = pub JWasmtimeInstance,
     java_type = "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeInstance",
 
     type_map = {
@@ -50,22 +61,36 @@ bind_java_type! {
         unsafe ModuleHandle => long,
         unsafe LinkerHandle => long,
         unsafe InstanceHandle => long,
-
+        JWasmtimeStore => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeStore",
+        JWasmtimeLinker => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeLinker",
+        JWasmtimeModule =>  "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeModule",
+        JWasmtimeFunction =>  "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction",
+        JWasmtimeLocalMemory => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeLocalMemory",
+        JWasmtimeFuncRef => "io.github.stefanrichterhuber.wasmtimejavang.internal.WasmtimeFuncRef",
     },
 
     constructors {
-        fn new(store: StoreHandle, module: ModuleHandle, linker: LinkerHandle),
+        fn new(store: JWasmtimeStore, module: JWasmtimeModule, linker: JWasmtimeLinker),
+    },
+
+    fields {
+        instantace_ptr: jlong,
+        store: JWasmtimeStore,
+        module: JWasmtimeModule,
+        linker: JWasmtimeLinker,
     },
 
     methods {
-
+       fn invoke(name: JString, args: JObject[]) -> JObject[],
+       fn get_function(name: JString) -> JWasmtimeFunction,
+       fn get_memory(name: JString) -> JWasmtimeLocalMemory,
     },
 
     native_methods {
         extern fn create_instance(module: ModuleHandle, store: StoreHandle, linker: LinkerHandle ) -> jlong,
         extern fn close_instance(instance: InstanceHandle, store: StoreHandle,),
         extern fn run_wasm_func(store: StoreHandle, instance: InstanceHandle, name: JString, parameters: JObject[]) -> JObject[],
-        extern fn get_function_reference(store: StoreHandle,instance: InstanceHandle, name: JString) -> JObject,
+        extern fn get_function_reference(store: StoreHandle,instance: InstanceHandle, name: JString) -> JWasmtimeFuncRef,
     }
 }
 
@@ -148,7 +173,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         };
 
         // Store a reference to the java instance in the store
-        let global_this = env.new_global_ref(this.0)?;
+        let global_this = env.new_global_ref(this)?;
         unsafe { store.as_ref() }.data_mut().instance = Some(global_this);
         debug!("Created Instance");
         Ok(result)
@@ -160,27 +185,30 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         store: StoreHandle,
         instance: InstanceHandle,
         name: ::jni::objects::JString<'local>,
-    ) -> ::std::result::Result<::jni::objects::JObject<'local>, Self::Error> {
+    ) -> ::std::result::Result<JWasmtimeFuncRef<'local>, Self::Error> {
         let instance = unsafe { instance.as_ref() };
         let name = name.to_string();
         let func = instance.get_func(unsafe { store.as_ref() }, &name);
 
         if let Some(f) = func {
-            let func_object = convert_func_to_func_ref(env, store, f)?;
+            let func_object = JWasmtimeFuncRef::from_func(env, store, f)?;
             Ok(func_object)
         } else {
-            Ok(JObject::null())
+            Ok(JWasmtimeFuncRef::null())
         }
     }
 }
 
+///
+/// Throws a java RuntimeException from a wasmtime::Error
+///
 pub fn handle_wasmtime_error<'local>(
     env: &mut ::jni::Env<'local>,
     e: wasmtime::Error,
 ) -> ::std::result::Result<(), jni::errors::Error> {
     let messages: Vec<_> = e.chain().map(|e| e.to_string()).collect();
     let msg = messages.join("\n");
-    error!("Wasmtime error: {}", msg);
+    debug!("Wasmtime error: {}", msg);
     let msg = JNIString::from(msg);
     env.throw_new(jni_str!("java/lang/RuntimeException"), msg)?;
     Ok(())
@@ -211,6 +239,92 @@ impl ExternRefContainer {
 }
 
 ///
+/// Converts a wasmtime Val to a java object
+///
+pub fn convert_val_to_java_object<'local>(
+    env: &mut ::jni::Env<'local>,
+    store: StoreHandle,
+    value: &Val,
+) -> Result<JObject<'local>, jni::errors::Error> {
+    let obj: Option<JObject> = match value {
+        Val::I32(v) => {
+            let obj = JInteger::value_of(env, *v)?;
+            Some(obj.into())
+        }
+        Val::I64(v) => {
+            let obj = JLong::value_of(env, *v)?;
+            Some(obj.into())
+        }
+        Val::F32(v) => {
+            let obj = JFloat::value_of(env, f32::from_bits(*v))?;
+            Some(obj.into())
+        }
+        Val::F64(v) => {
+            let obj = JDouble::value_of(env, f64::from_bits(*v))?;
+            Some(obj.into())
+        }
+        Val::V128(v128) => {
+            debug!("Converting V128 value to java V128");
+            let v128_object = JV128::from_v128(env, v128)?;
+            Some(v128_object.into())
+        }
+        Val::FuncRef(func) => {
+            if let Some(f) = func {
+                let func_object = JWasmtimeFuncRef::from_func(env, store, *f)?;
+                Some(func_object.into())
+            } else {
+                None
+            }
+        }
+        Val::ExternRef(rooted) => {
+            if let Some(reference) = rooted {
+                let global = reference
+                    .data(unsafe { store.as_ref() })
+                    .and_then(|global| {
+                        global.ok_or(wasmtime::Error::msg("failed to unpack externref"))
+                    })
+                    .and_then(|global| {
+                        global
+                            .downcast_ref::<ExternRefContainer>()
+                            .ok_or(wasmtime::Error::msg("failed to downcast externref"))
+                    });
+
+                let value = match global {
+                    Ok(g) => {
+                        debug!("Successfully unpacked ExternRef value");
+                        Some(unsafe { JObject::from_raw(env, g.value.as_obj().as_raw()) })
+                    }
+                    Err(e) => {
+                        error!("Failed to unpack ExternRef value: {}", e);
+                        None
+                    }
+                };
+                value
+            } else {
+                None
+            }
+        }
+        Val::AnyRef(_rooted) => {
+            warn!("Unsupported wasm type to java conversion: AnyRef");
+            None
+        }
+        Val::ExnRef(_rooted) => {
+            warn!("Unsupported wasm type to java conversion: ExnRef");
+            None
+        }
+        Val::ContRef(_cont_ref) => {
+            warn!("Unsupported wasm type to java conversion: ContRef");
+            None
+        }
+    };
+
+    match obj {
+        Some(v) => Ok(v),
+        None => Ok(JObject::null()),
+    }
+}
+
+///
 /// Converts a vec<Val> to a java Object[]
 ///
 pub fn convert_val_vector_to_java_array<'local>(
@@ -227,139 +341,99 @@ pub fn convert_val_vector_to_java_array<'local>(
     )?;
 
     for (index, v) in values.iter().enumerate() {
-        let obj: Option<jni::objects::JObject> = match v {
-            Val::I32(v) => {
-                let class = env.find_class(jni_str!("java/lang/Integer"))?;
-                Some(
-                    env.call_static_method(
-                        &class,
-                        jni_str!("valueOf"),
-                        jni_sig!( (jint) -> java.lang.Integer),
-                        &[JValue::Int(*v)],
-                    )?
-                    .l()?,
-                )
-            }
-            Val::I64(v) => {
-                let class = env.find_class(jni_str!("java/lang/Long"))?;
-                Some(
-                    env.call_static_method(
-                        &class,
-                        jni_str!("valueOf"),
-                        jni_sig!( (jlong) -> java.lang.Long),
-                        &[JValue::Long(*v)],
-                    )?
-                    .l()?,
-                )
-            }
-            Val::F32(v) => {
-                let class = env.find_class(jni_str!("java/lang/Float"))?;
-                Some(
-                    env.call_static_method(
-                        &class,
-                        jni_str!("valueOf"),
-                        jni_sig!( (jfloat) -> java.lang.Float),
-                        &[JValue::Float(f32::from_bits(*v))],
-                    )?
-                    .l()?,
-                )
-            }
-            Val::F64(v) => {
-                let class = env.find_class(jni_str!("java/lang/Double"))?;
-                Some(
-                    env.call_static_method(
-                        &class,
-                        jni_str!("valueOf"),
-                        jni_sig!( (jdouble) -> java.lang.Double),
-                        &[JValue::Double(f64::from_bits(*v))],
-                    )?
-                    .l()?,
-                )
-            }
-            Val::V128(v128) => {
-                debug!("Converting V128 value to java V128");
-                let value_bytes = v128.as_u128().to_le_bytes();
-                let signed_value_bytes: &[i8] = unsafe {
-                    std::slice::from_raw_parts(value_bytes.as_ptr() as *const i8, value_bytes.len())
-                };
-                let byte_array = env.new_byte_array(value_bytes.len())?;
-
-                byte_array.set_region(env, 0, &signed_value_bytes)?;
-
-                let class =
-                    env.find_class(jni_str!("io/github/stefanrichterhuber/wasmtimejavang/V128"))?;
-
-                let v128_object = env.new_object(
-                    class,
-                    jni_sig!((jbyte[]) -> void),
-                    &[JValue::Object(&byte_array)],
-                )?;
-
-                Some(v128_object)
-            }
-            Val::FuncRef(func) => {
-                if let Some(f) = func {
-                    let func_object = convert_func_to_func_ref(env, store, *f)?;
-                    Some(func_object)
-                } else {
-                    None
-                }
-            }
-            Val::ExternRef(rooted) => {
-                if let Some(reference) = rooted {
-                    let global = reference.data(unsafe { store.as_ref() }).unwrap().unwrap();
-                    let global = global.downcast_ref::<ExternRefContainer>().unwrap();
-
-                    let value = unsafe { JObject::from_raw(env, global.value.as_obj().as_raw()) };
-                    Some(value)
-                } else {
-                    None
-                }
-            }
-            Val::AnyRef(_rooted) => {
-                warn!("Unsupported wasm type to java conversion: AnyRef");
-                None
-            }
-            Val::ExnRef(_rooted) => {
-                warn!("Unsupported wasm type to java conversion: ExnRef");
-                None
-            }
-            Val::ContRef(_cont_ref) => {
-                warn!("Unsupported wasm type to java conversion: ContRef");
-                None
-            }
-        };
-
-        if let Some(obj_ref) = obj {
-            array.set_element(env, index, obj_ref)?;
-        } else {
-            array.set_element(env, index, JObject::null())?;
-        }
+        let obj_ref = convert_val_to_java_object(env, store, v)?;
+        array.set_element(env, index, obj_ref)?;
     }
 
     Ok(array)
 }
 
 ///
-/// Converts a wasm func to a java WasmtimeFuncRef
+///  Converts a single java object into the corresponding wasm Val
 ///
-pub fn convert_func_to_func_ref<'local>(
+pub fn convert_java_object_to_val<'local>(
     env: &mut ::jni::Env<'local>,
     store: StoreHandle,
-    func: Func,
-) -> Result<JObject<'local>, jni::errors::Error> {
-    debug!("Converting wasm type 'FuncRef' to java type 'WasmtimeFuncRef'");
-    let handle = FuncHandle::new(func);
+    item: JObject<'local>,
+    val_type: &ValType,
+) -> Result<Val, jni::errors::Error> {
+    let val = match val_type {
+        wasmtime::ValType::I32 => {
+            if item.is_null() {
+                Val::I32(0)
+            } else {
+                debug!("Convert Integer to Val::I32");
+                let o = env.cast_local::<JNumber>(item)?;
+                let v = o.int_value(env)?;
+                Val::I32(v)
+            }
+        }
+        wasmtime::ValType::I64 => {
+            if item.is_null() {
+                Val::I64(0)
+            } else {
+                debug!("Convert Long to Val::I64");
+                let o = env.cast_local::<JNumber>(item)?;
+                let v = o.long_value(env)?;
 
-    let class = env.find_class(jni_str!(
-        "io/github/stefanrichterhuber/wasmtimejavang/internal/WasmtimeFuncRef"
-    ))?;
-    let func_object = env.new_object(
-        &class,
-        jni_sig!((jlong, jlong) -> void),
-        &[JValue::Long(handle.into()), JValue::Long(store.into())],
-    )?;
-    Ok(func_object)
+                Val::I64(v)
+            }
+        }
+        wasmtime::ValType::F32 => {
+            if item.is_null() {
+                Val::F32(0)
+            } else {
+                debug!("Convert Float to Val::F32");
+                let o = env.cast_local::<JNumber>(item)?;
+                let v = o.float_value(env)?;
+                Val::F32(v.to_bits())
+            }
+        }
+        wasmtime::ValType::F64 => {
+            if item.is_null() {
+                Val::F64(0)
+            } else {
+                debug!("Convert Double to Val::F64");
+                let o = env.cast_local::<JNumber>(item)?;
+                let v = o.double_value(env)?;
+                Val::F64(v.to_bits())
+            }
+        }
+        wasmtime::ValType::V128 => {
+            if item.is_null() {
+                Val::V128(u128::default().into())
+            } else {
+                debug!("Converting V128 object to V128 value");
+                let item = env.cast_local::<JV128>(item)?;
+                Val::V128(item.into_v128(env)?)
+            }
+        }
+        wasmtime::ValType::Ref(ref_type) => {
+            if ref_type.matches(&RefType::EXTERNREF) {
+                debug!("Creating EXTERNREF from any java object");
+                let global_item = env.new_global_ref(item)?;
+                let container = ExternRefContainer::new(global_item);
+                let r = ExternRef::new(unsafe { store.as_ref() }, container)
+                    .and_then(|r| Ok(Val::ExternRef(Some(r))));
+
+                match r {
+                    Ok(r) => r,
+                    Err(_e) => {
+                        error!("Failed to pack java object into wasm ExternRef");
+                        Val::null_extern_ref()
+                    }
+                }
+            } else {
+                warn!(
+                    "Extern ref type {} conversion from java to wasm not supported",
+                    ref_type
+                );
+                Val::null_any_ref()
+            }
+        }
+    };
+
+    Ok(val)
 }
 
 ///
@@ -373,72 +447,11 @@ pub fn convert_java_array_to_val_vector<'local>(
 ) -> Result<Vec<Val>, jni::errors::Error> {
     let array_len = values.len(env)?;
 
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(array_len);
     for index in 0..array_len {
         let item = values.get_element(env, index)?;
-        let val_type = param_types.get(index).unwrap_or(&wasmtime::ValType::I64);
-        let val = match val_type {
-            wasmtime::ValType::I32 => {
-                let v = env
-                    .call_method(&item, jni_str!("intValue"), jni_sig!( () ->jint), &[])?
-                    .i()?;
-                Val::I32(v)
-            }
-            wasmtime::ValType::I64 => {
-                let v = env
-                    .call_method(&item, jni_str!("longValue"), jni_sig!( () ->jlong), &[])?
-                    .j()?;
-                Val::I64(v)
-            }
-            wasmtime::ValType::F32 => {
-                let v = env
-                    .call_method(&item, jni_str!("floatValue"), jni_sig!( () ->jfloat), &[])?
-                    .f()?;
-                Val::F32(v.to_bits())
-            }
-            wasmtime::ValType::F64 => {
-                let v = env
-                    .call_method(&item, jni_str!("doubleValue"), jni_sig!( () ->jdouble), &[])?
-                    .d()?;
-                Val::F64(v.to_bits())
-            }
-            wasmtime::ValType::V128 => {
-                debug!("Converting V128 object to V128 value");
-                let raw_value_array = env
-                    .call_method(&item, jni_str!("getBytes"), jni_sig!(() -> jbyte[]), &[])?
-                    .l()?;
-
-                let value_array = env.cast_local::<JPrimitiveArray<jbyte>>(raw_value_array)?;
-                let elements = unsafe {
-                    value_array.get_elements(env, jni::objects::ReleaseMode::NoCopyBack)?
-                };
-
-                let u8_array: [u8; 16] = elements
-                    .iter()
-                    .map(|&x| x as u8)
-                    .collect::<Vec<u8>>()
-                    .try_into()
-                    .unwrap();
-
-                let result = u128::from_le_bytes(u8_array);
-                Val::V128(V128::from(result))
-            }
-            wasmtime::ValType::Ref(ref_type) => {
-                if ref_type.matches(&RefType::EXTERNREF) {
-                    debug!("Creating EXTERNREF from any java object");
-                    let global_item = env.new_global_ref(item)?;
-                    let container = ExternRefContainer::new(global_item);
-                    let r = ExternRef::new(unsafe { store.as_ref() }, container).unwrap();
-                    Val::ExternRef(Some(r))
-                } else {
-                    warn!(
-                        "Extern ref type {} conversion from java to wasm not supported",
-                        ref_type
-                    );
-                    Val::I64(0)
-                }
-            }
-        };
+        let val_type = param_types.get(index).unwrap();
+        let val = convert_java_object_to_val(env, store, item, val_type)?;
         result.push(val);
     }
     Ok(result)

@@ -1,4 +1,6 @@
+pub mod java_numbers;
 pub mod logging;
+pub mod wasmcontext;
 pub mod wasmengine;
 pub mod wasminstance;
 pub mod wasmlinker;
@@ -6,4 +8,7 @@ pub mod wasmmemory;
 pub mod wasmmodule;
 pub mod wasmsharedmemory;
 pub mod wasmstore;
-pub mod wasmtimefunc;
+pub mod wasmtime_v128;
+pub mod wasmtime_valtype;
+pub mod wasmtimefuncref;
+pub mod wasmtimefunction;

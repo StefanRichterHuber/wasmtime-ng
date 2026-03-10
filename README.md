@@ -98,7 +98,7 @@ All type conversions are bi-directional if not mentioned otherwise.
 | **`I64`** | `java.lang.Long` | Numbers are always boxed |
 | **`F32`** | `java.lang.Float` | Numbers are always boxed |
 | **`F64`** | `java.lang.Double` | Numbers are always boxed |
-| **`V128`** | `io.github.stefanrichterhuber.wasmtimejavang.V128` | V128 is a wrapper around `byte[16]`. Build in conversion from /to `byte[]`, `short[]` and `long[]` |
+| **`V128`** | `io.github.stefanrichterhuber.wasmtimejavang.V128` | V128 is a wrapper around `byte[16]`. Build in conversion from /to `byte[]`, `short[]`, `int[]`, `long[]` and `BigInteger` |
 | **`FuncRef`** | `io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction` | Callable function reference. Currently export from wasm to java supported |
 | **`ExternRef`** | any java object | Any java object can be passed through the wasm runtime as extern ref |
 

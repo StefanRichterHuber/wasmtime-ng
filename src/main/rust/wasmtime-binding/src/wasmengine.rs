@@ -28,11 +28,15 @@ impl From<EngineHandle> for jlong {
 }
 
 bind_java_type! {
-     rust_type = JWasmtimeEngine,
+     rust_type = pub JWasmtimeEngine,
      java_type = "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeEngine",
 
     type_map = {
         unsafe EngineHandle => long,
+    },
+
+    fields = {
+        engine_ptr: jlong,
     },
 
     constructors {

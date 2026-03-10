@@ -1,11 +1,11 @@
-use crate::wasminstance::InstanceHandle;
+use crate::wasminstance::{InstanceHandle, handle_wasmtime_error};
 use crate::wasmstore::StoreHandle;
 use jni::{bind_java_type, jni_str, strings::JNIString};
 use log::{debug, error};
 use wasmtime::Extern;
 
 bind_java_type! {
-    rust_type = JWasmtimeLocalMemory,
+    rust_type = pub JWasmtimeLocalMemory,
     java_type = "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeLocalMemory",
 
     type_map = {
@@ -114,13 +114,17 @@ impl JWasmtimeLocalMemoryNativeInterface for JWasmtimeLocalMemoryAPI {
         match export {
             Some(Extern::Memory(mem)) => {
                 debug!("Growing single-instance memory {} by {} pages", name, delta);
-                mem.grow(store, delta.try_into().unwrap()).unwrap();
-                Ok(())
+                match mem.grow(store, delta.try_into().unwrap()) {
+                    Ok(_) => Ok(()),
+                    Err(e) => handle_wasmtime_error(env, e),
+                }
             }
             Some(Extern::SharedMemory(mem)) => {
                 debug!("Growing shared memory {} by {} pages", name, delta);
-                mem.grow(delta.try_into().unwrap()).unwrap();
-                Ok(())
+                match mem.grow(delta.try_into().unwrap()) {
+                    Ok(_) => Ok(()),
+                    Err(e) => handle_wasmtime_error(env, e),
+                }
             }
             _ => {
                 let msg = format!("Wasm memory '{}' not found!", name);

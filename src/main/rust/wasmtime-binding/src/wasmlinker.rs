@@ -1,15 +1,17 @@
-use crate::wasminstance::{convert_java_array_to_val_vector, convert_val_vector_to_java_array};
+use crate::wasminstance::{
+    convert_java_array_to_val_vector, convert_val_vector_to_java_array, handle_wasmtime_error,
+};
 use crate::wasmsharedmemory::SharedMemoryHandle;
 use crate::wasmstore::StoreHandle;
-use crate::{wasmengine::EngineHandle, wasmstore::StoreContent};
-use jni::objects::JObjectArray;
-use jni::{
-    JValue, bind_java_type, jni_sig, jni_str,
-    objects::{JList, JObject, JString},
-    sys::jlong,
+use crate::wasmtime_valtype::convert_val_type_enum_list_to_vec;
+use crate::{
+    wasmcontext::JWasmContext, wasmengine::EngineHandle, wasmengine::JWasmtimeEngine,
+    wasmstore::JWasmtimeStore, wasmstore::StoreContent,
 };
+use jni::objects::JObjectArray;
+use jni::{JValue, bind_java_type, jni_sig, jni_str, objects::JObject, sys::jlong};
 use log::{debug, error};
-use wasmtime::{Func, FuncType, Linker, RefType, ValType};
+use wasmtime::{Func, FuncType, Linker};
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
@@ -38,7 +40,7 @@ impl From<LinkerHandle> for jlong {
 }
 
 bind_java_type! {
-    rust_type = JWasmtimeLinker,
+    rust_type = pub JWasmtimeLinker,
     java_type = "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeLinker",
 
     type_map = {
@@ -46,14 +48,23 @@ bind_java_type! {
         unsafe LinkerHandle => long,
         unsafe StoreHandle => long,
         unsafe SharedMemoryHandle => long,
+        JWasmtimeEngine => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeEngine",
+        JWasmtimeStore => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeStore",
+        JWasmContext => "io.github.stefanrichterhuber.wasmtimejavang.WasmContext",
+    },
+
+    fields = {
+        linker_ptr: jlong,
+        engine: JWasmtimeEngine,
+        store: JWasmtimeStore
     },
 
     constructors {
-        fn new(engine: EngineHandle),
+        fn new(engine: JWasmtimeEngine, store:JWasmtimeStore),
     },
 
     methods {
-
+        fn link(context: JWasmContext)
     },
 
     native_methods {
@@ -163,7 +174,7 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                         Ok(())
                     }
                     Err(e) => {
-                        error!("Failed to invoke java function {}: {}", func_name, e);
+                        debug!("Failed to invoke java function {}: {}", func_name, e);
                         Err(convert_jvm_error_to_wasmtime_error(e))
                     }
                 }
@@ -171,19 +182,19 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         );
         // 3. Add to Linker
         let linker = unsafe { linker.as_ref() };
-        linker
-            .define(
-                unsafe { store.as_ref() },
-                &module.to_string(),
-                &name.to_string(),
-                dynamic_func,
-            )
-            .unwrap();
-        Ok(())
+        match linker.define(
+            unsafe { store.as_ref() },
+            &module.to_string(),
+            &name.to_string(),
+            dynamic_func,
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => handle_wasmtime_error(env, e),
+        }
     }
 
     fn define_memory<'local>(
-        _env: &mut ::jni::Env<'local>,
+        env: &mut ::jni::Env<'local>,
         _this: JWasmtimeLinker<'local>,
         store: StoreHandle,
         linker: LinkerHandle,
@@ -198,11 +209,10 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         let name = name.to_string();
 
         linker.allow_shadowing(true);
-        linker
-            .define(&mut *store, &module, &name, shared_memory.clone())
-            .unwrap();
-
-        Ok(())
+        match linker.define(&mut *store, &module, &name, shared_memory.clone()) {
+            Ok(_) => Ok(()),
+            Err(e) => handle_wasmtime_error(env, e),
+        }
     }
 }
 
@@ -222,70 +232,4 @@ pub fn convert_jvm_error_to_wasmtime_error(
     }
 
     result
-}
-
-///
-/// Converts the list of java ValType enums to a vec of rust ValTyp enums
-///
-fn convert_val_type_enum_list_to_vec<'local>(
-    env: &mut ::jni::Env<'local>,
-    values: JList,
-) -> Result<Vec<ValType>, jni::errors::Error> {
-    let iterator = env
-        .call_method(
-            values,
-            jni_str!("iterator"),
-            jni_sig!( () -> java.util.Iterator),
-            &[],
-        )?
-        .l()?;
-
-    let mut result = Vec::new();
-
-    // Call the iterator on the list to fetch each enum
-    while env
-        .call_method(
-            &iterator,
-            jni_str!("hasNext"),
-            jni_sig!( () -> jboolean),
-            &[],
-        )?
-        .z()?
-    {
-        let item = env
-            .call_method(
-                &iterator,
-                jni_str!("next"),
-                jni_sig!( () -> java.lang.Object),
-                &[],
-            )?
-            .l()?;
-
-        // Fore each enum we get the name and convert it to a string
-        let enum_value_name = env
-            .call_method(
-                &item,
-                jni_str!("name"),
-                jni_sig!( () -> java.lang.String),
-                &[],
-            )?
-            .l()?;
-        let enum_value_name = JString::cast_local(env, enum_value_name)?;
-        let enum_value_name: String = enum_value_name.to_string();
-
-        // Then convert the name of the enum into the corresponding ValType
-        let value: ValType = match enum_value_name.as_str() {
-            "I32" => ValType::I32,
-            "I64" => ValType::I64,
-            "F32" => ValType::F32,
-            "F64" => ValType::F64,
-            "V128" => ValType::V128,
-            "Ref" => ValType::Ref(RefType::EXTERNREF),
-            _ => ValType::I32,
-        };
-
-        result.push(value);
-    }
-
-    Ok(result)
 }

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.FileInputStream;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -531,6 +532,43 @@ public class WasmtimeValueTest {
                 V128 resultV = (V128) result[0];
 
                 assertArrayEquals(expectedResult, resultV.getShorts());
+            }
+        }
+    }
+
+    @Test
+    public void testWatV128BigIntTest() throws Exception {
+
+        try (
+                WasmtimeEngine engine = new WasmtimeEngine();
+                WasmtimeModule module = new WasmtimeModule(engine, WAT_V128_INT_STRING);
+                WasmtimeStore store = new WasmtimeStore(engine);
+                WasmtimeLinker linker = new WasmtimeLinker(engine, store);
+
+        ) {
+
+            try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
+
+                BigInteger bi = new BigInteger("248248248248");
+                V128 v = new V128(bi);
+                BigInteger result = v.getBigInteger();
+                assertEquals(bi, result);
+
+                // Verify byte order consistency with int[]
+                // 248248248248 = 0x39CCBFA7B8
+                // Lane 0: 0xCCBFA7B8 = -859854920, Lane 1: 0x39 = 57
+                int[] expectedInts = { -859854920, 57, 0, 0 };
+                assertArrayEquals(expectedInts, v.getInts());
+
+                Object[] results = instance.invoke("multiply_by_two", v);
+                assertNotNull(results);
+                assertEquals(1, results.length);
+                assertInstanceOf(V128.class, results[0]);
+                V128 resultV = (V128) results[0];
+
+                // Lane 0: 0x997F4F70 = -1719709840, Lane 1: 0x72 = 114
+                int[] expectedResultInts = { -1719709840, 114, 0, 0 };
+                assertArrayEquals(expectedResultInts, resultV.getInts());
             }
         }
     }

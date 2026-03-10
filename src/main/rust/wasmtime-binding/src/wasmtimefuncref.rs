@@ -1,3 +1,5 @@
+use crate::wasminstance::JWasmtimeInstance;
+use crate::wasmtimefunction::JWasmtimeFunction;
 use jni::{bind_java_type, sys::jlong};
 use log::debug;
 use wasmtime::{Func, Val};
@@ -35,15 +37,27 @@ impl From<FuncHandle> for jlong {
 }
 
 bind_java_type! {
-    rust_type = JWasmtimeFuncRef,
+    rust_type = pub JWasmtimeFuncRef,
     java_type = "io.github.stefanrichterhuber.wasmtimejavang.internal.WasmtimeFuncRef",
 
     type_map = {
         unsafe FuncHandle => long,
         unsafe StoreHandle => long,
+        JWasmtimeInstance => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeInstance",
+        JWasmtimeFunction => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction",
     },
+
     constructors {
         fn new(func: FuncHandle, store: StoreHandle),
+    },
+
+    methods = {
+        fn call(instance: JWasmtimeInstance, context: JMap, args: JObject[]) -> JObject[],
+    },
+
+    is_instance_of = {
+        // With stem: generates as_base() method
+        base: JWasmtimeFunction,
     },
 
     native_methods {
@@ -83,5 +97,19 @@ impl JWasmtimeFuncRefNativeInterface for JWasmtimeFuncRefAPI {
         };
 
         Ok(result)
+    }
+}
+
+impl<'local> JWasmtimeFuncRef<'local> {
+    pub fn from_func(
+        env: &mut ::jni::Env<'local>,
+        store: StoreHandle,
+        func: Func,
+    ) -> Result<JWasmtimeFuncRef<'local>, jni::errors::Error> {
+        debug!("Converting wasm type 'FuncRef' to java type 'WasmtimeFuncRef'");
+        let handle = FuncHandle::new(func);
+
+        let func_object = JWasmtimeFuncRef::new(env, handle, store)?;
+        Ok(func_object)
     }
 }
