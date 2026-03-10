@@ -8,7 +8,7 @@ import java.util.Arrays;
 /**
  * Representation of the WASM V128 value
  */
-public final class V128 {
+public final class V128 extends Number implements Comparable<V128> {
     /**
      * WASM memory is always little endian
      */
@@ -207,6 +207,31 @@ public final class V128 {
     @Override
     public int hashCode() {
         return Arrays.hashCode(parts);
+    }
+
+    @Override
+    public double doubleValue() {
+        return getBigInteger().doubleValue();
+    }
+
+    @Override
+    public float floatValue() {
+        return getBigInteger().floatValue();
+    }
+
+    @Override
+    public int intValue() {
+        return getBigInteger().intValue();
+    }
+
+    @Override
+    public long longValue() {
+        return getBigInteger().longValue();
+    }
+
+    @Override
+    public int compareTo(V128 arg0) {
+        return getBigInteger().compareTo(arg0.getBigInteger());
     }
 
 }

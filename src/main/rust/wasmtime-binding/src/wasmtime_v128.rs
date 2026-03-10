@@ -1,3 +1,4 @@
+use crate::java_numbers::JNumber;
 use jni::bind_java_type;
 use log::debug;
 use wasmtime::V128;
@@ -5,6 +6,10 @@ use wasmtime::V128;
 bind_java_type! {
     rust_type = pub JV128,
     java_type = io.github.stefanrichterhuber.wasmtimejavang.V128,
+
+    type_map = {
+        JNumber =>  "java.lang.Number"
+    },
 
     constructors {
         fn new_from_bytes(parts: jbyte[]),
@@ -18,6 +23,11 @@ bind_java_type! {
         fn get_shorts() -> jshort[],
         fn get_ints() -> jint[],
         fn get_longs() -> jlong[],
+    },
+
+    is_instance_of = {
+        // With stem: generates as_number() method
+        number: JNumber,
     },
 }
 
