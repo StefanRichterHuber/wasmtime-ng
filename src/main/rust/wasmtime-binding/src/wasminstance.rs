@@ -14,7 +14,10 @@ use crate::wasmstore::StoreHandle;
 use crate::wasmtime_v128::JV128;
 use crate::wasmtimefuncref::JWasmtimeFuncRef;
 use crate::wasmtimefunction::JWasmtimeFunction;
+use jni::objects::JClass;
 use jni::refs::Global;
+use jni::refs::LoaderContext;
+use jni::refs::Reference;
 use jni::{
     bind_java_type, jni_str,
     objects::{JObject, JObjectArray},
@@ -362,7 +365,7 @@ pub fn convert_java_object_to_val<'local>(
             if item.is_null() {
                 Val::I32(0)
             } else {
-                debug!("Convert Integer to Val::I32");
+                debug!("Convert Number to Val::I32");
                 let o = env.cast_local::<JNumber>(item)?;
                 let v = o.int_value(env)?;
                 Val::I32(v)
@@ -372,7 +375,7 @@ pub fn convert_java_object_to_val<'local>(
             if item.is_null() {
                 Val::I64(0)
             } else {
-                debug!("Convert Long to Val::I64");
+                debug!("Convert Number to Val::I64");
                 let o = env.cast_local::<JNumber>(item)?;
                 let v = o.long_value(env)?;
 
@@ -383,7 +386,7 @@ pub fn convert_java_object_to_val<'local>(
             if item.is_null() {
                 Val::F32(0)
             } else {
-                debug!("Convert Float to Val::F32");
+                debug!("Convert Number to Val::F32");
                 let o = env.cast_local::<JNumber>(item)?;
                 let v = o.float_value(env)?;
                 Val::F32(v.to_bits())
@@ -393,7 +396,7 @@ pub fn convert_java_object_to_val<'local>(
             if item.is_null() {
                 Val::F64(0)
             } else {
-                debug!("Convert Double to Val::F64");
+                debug!("Convert Number to Val::F64");
                 let o = env.cast_local::<JNumber>(item)?;
                 let v = o.double_value(env)?;
                 Val::F64(v.to_bits())
@@ -403,9 +406,21 @@ pub fn convert_java_object_to_val<'local>(
             if item.is_null() {
                 Val::V128(u128::default().into())
             } else {
-                debug!("Converting V128 object to V128 value");
-                let item = env.cast_local::<JV128>(item)?;
-                Val::V128(item.into_v128(env)?)
+                let v128_class = JV128::lookup_class(env, &LoaderContext::None)?;
+                let v128_class: &JClass = v128_class.as_ref();
+
+                debug!("Convert Number to Val::V128");
+                let o = env.cast_local::<JNumber>(item)?;
+
+                if env.is_instance_of(&o, v128_class)? {
+                    let item = env.cast_local::<JV128>(o)?;
+                    Val::V128(item.into_v128(env)?)
+                } else {
+                    let value = o.long_value(env)?;
+                    let value = u64::from_ne_bytes(value.to_ne_bytes());
+
+                    Val::V128(u128::from(value).into())
+                }
             }
         }
         wasmtime::ValType::Ref(ref_type) => {
