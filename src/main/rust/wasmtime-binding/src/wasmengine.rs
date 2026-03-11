@@ -43,6 +43,10 @@ bind_java_type! {
         fn new(),
     },
 
+    methods {
+        static fn runtime_log(level: jint, message: JString),
+    },
+
     native_methods {
         extern fn close_engine(handle: EngineHandle),
         extern fn create_engine() -> jlong,
