@@ -89,7 +89,7 @@ public class WasiThreadContext implements WasmContext {
      * @param args     Call args (contains the single argument for new thread)
      * @return Thread id
      */
-    private Object[] spawnThread(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] spawnThread(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
         final int arg = (int) args[0];
         final int tid = nextTid.getAndIncrement();
 

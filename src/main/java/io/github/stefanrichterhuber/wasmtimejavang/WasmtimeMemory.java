@@ -25,9 +25,11 @@ public interface WasmtimeMemory {
      * 
      * @param address The starting address in WASM memory.
      * @param data    The byte array to write.
+     * @returns Number of bytes written
      */
-    default void write(int address, byte[] data) {
+    default int write(int address, byte[] data) {
         buffer().put(address, data);
+        return data.length;
     }
 
     /**
@@ -35,9 +37,11 @@ public interface WasmtimeMemory {
      * 
      * @param address The address in WASM memory.
      * @param data    The byte to write.
+     * @returns Number of bytes written
      */
-    default void write(int address, byte data) {
+    default int write(int address, byte data) {
         buffer().put(address, data);
+        return Byte.BYTES;
     }
 
     /**
@@ -45,9 +49,11 @@ public interface WasmtimeMemory {
      * 
      * @param address The starting address in WASM memory.
      * @param value   The short value to write.
+     * @returns Number of bytes written
      */
-    default void writeShort(int address, short value) {
+    default int writeShort(int address, short value) {
         buffer().putShort(address, value);
+        return Short.BYTES;
     }
 
     /**
@@ -56,9 +62,11 @@ public interface WasmtimeMemory {
      * 
      * @param address The starting address in WASM memory.
      * @param value   The integer value to write.
+     * @returns Number of bytes written
      */
-    default void writeInt(int address, int value) {
+    default int writeInt(int address, int value) {
         buffer().putInt(address, value);
+        return Integer.BYTES;
     }
 
     /**
@@ -66,9 +74,11 @@ public interface WasmtimeMemory {
      * 
      * @param address The starting address in WASM memory.
      * @param value   The long value to write.
+     * @returns Number of bytes written
      */
-    default void writeLong(int address, long value) {
+    default int writeLong(int address, long value) {
         buffer().putLong(address, value);
+        return Long.BYTES;
     }
 
     /**
@@ -77,10 +87,12 @@ public interface WasmtimeMemory {
      * @param address The starting address in WASM memory.
      * @param str     The string to write.
      * @param charset The charset to use for encoding.
+     * @returns Number of bytes written
      */
-    default void writeString(int address, String str, Charset charset) {
+    default int writeString(int address, String str, Charset charset) {
         final byte[] buf = str.getBytes(charset);
         this.write(address, buf);
+        return buf.length;
     }
 
     /**
@@ -90,12 +102,14 @@ public interface WasmtimeMemory {
      * @param address The starting address in WASM memory.
      * @param str     The string to write.
      * @param charset The charset to use for encoding.
+     * @returns Number of bytes written
      */
-    default void writeCString(int address, String str, Charset charset) {
+    default int writeCString(int address, String str, Charset charset) {
         final byte[] data = str.getBytes(charset);
         final ByteBuffer buf = buffer();
         buf.put(address, data);
         buf.put(address + data.length, (byte) 0);
+        return data.length + 1; // +1 for null termination
     }
 
     /**
