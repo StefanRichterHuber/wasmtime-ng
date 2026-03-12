@@ -161,7 +161,7 @@ try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix())) {
     linker.link(wasi);
     
     try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-        instance.invoke("_start");
+        instance.start();
     }
 }
 ```
