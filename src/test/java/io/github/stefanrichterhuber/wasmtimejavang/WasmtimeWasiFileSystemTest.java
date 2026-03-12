@@ -41,7 +41,7 @@ public class WasmtimeWasiFileSystemTest {
                     .withStdErr(System.err));
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-                Object[] result = instance.invoke("_start");
+                Object[] result = instance.start();
                 assertNotNull(result);
             }
 

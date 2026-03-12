@@ -91,4 +91,8 @@ public final class WasmtimeStore implements AutoCloseable {
     public WasmtimeEngine getEngine() {
         return this.engine;
     }
+
+    public WasmtimeStore createClone() {
+        return new WasmtimeStore(this.engine, this.context);
+    }
 }

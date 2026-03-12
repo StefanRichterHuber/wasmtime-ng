@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
@@ -19,6 +20,8 @@ public final class WasmtimeLinker implements AutoCloseable {
     private final WasmtimeEngine engine;
 
     private final WasmtimeStore store;
+
+    private final List<WasmContext> contexts = new ArrayList<>();
 
     private native long createLinker(long enginePtr);
 
@@ -73,18 +76,34 @@ public final class WasmtimeLinker implements AutoCloseable {
     }
 
     /**
+     * Links all import functions from a collection of WasmContexts.
+     * 
+     * @param contexts The collection of contexts providing imports (e.g., WASI
+     *                 contexts).
+     */
+    public void link(Iterable<? extends WasmContext> contexts) {
+        for (WasmContext context : contexts) {
+            this.link(context);
+        }
+    }
+
+    /**
      * Links all import functions from a WasmContext.
      * 
      * @param context The context providing imports (e.g., a WASI context).
      */
     public void link(WasmContext context) {
+        this.contexts.add(context);
+        LOGGER.debug("Adding context {} to store", context.name());
         for (WasmContext.ImportFunction importFunction : context.getImportFunctions()) {
-            this.importFunction(importFunction.module(), importFunction.name(), importFunction.parameters(),
-                    importFunction.returnTypes(), importFunction.function());
+            this.defineFunction(getEngine().getEnginePtr(), getStore().getStorePtr(), getLinkerPtr(),
+                    importFunction.function(), importFunction.module(), importFunction.name(),
+                    importFunction.parameters(), importFunction.returnTypes());
         }
 
         for (Importmemory memory : context.getMemories()) {
-            this.defineSharedMemory(memory.module(), memory.name(), memory.memory());
+            this.defineMemory(getStore().getStorePtr(), getLinkerPtr(), memory.memory().getSharedMemoryPtr(),
+                    memory.module(), memory.name());
         }
     }
 
@@ -99,8 +118,23 @@ public final class WasmtimeLinker implements AutoCloseable {
      */
     public void importFunction(String module, String name, List<ValType> parameters, List<ValType> returnTypes,
             WasmtimeFunction f) {
-        defineFunction(this.engine.getEnginePtr(), this.store.getStorePtr(), getLinkerPtr(), f, module, name,
-                parameters, returnTypes);
+
+        this.link(new WasmContext() {
+            @Override
+            public List<ImportFunction> getImportFunctions() {
+                return List.of(new ImportFunction(module, name, parameters, returnTypes, f));
+            }
+
+            @Override
+            public List<Importmemory> getMemories() {
+                return List.of();
+            }
+
+            @Override
+            public String name() {
+                return String.format("function %s::%s(%s) -> %s", module, name, parameters, returnTypes);
+            }
+        });
     }
 
     /**
@@ -111,7 +145,22 @@ public final class WasmtimeLinker implements AutoCloseable {
      * @param memory The shared memory to define.
      */
     public void defineSharedMemory(String module, String name, WasmtimeSharedMemory memory) {
-        defineMemory(this.store.getStorePtr(), getLinkerPtr(), memory.getSharedMemoryPtr(), module, name);
+        this.link(new WasmContext() {
+            @Override
+            public List<ImportFunction> getImportFunctions() {
+                return List.of();
+            }
+
+            @Override
+            public List<Importmemory> getMemories() {
+                return List.of(new Importmemory(module, name, memory));
+            }
+
+            @Override
+            public String name() {
+                return String.format("shared memory %s::%s", module, name);
+            }
+        });
     }
 
     /**
@@ -132,4 +181,27 @@ public final class WasmtimeLinker implements AutoCloseable {
         return this.engine;
     }
 
+    /**
+     * Returns a copy of the list of contexts that have been linked. This includes
+     * all directly defined memory and function imports.
+     * 
+     * @return A copy of the list of contexts.
+     */
+    public List<WasmContext> getContexts() {
+        return new ArrayList<>(this.contexts);
+    }
+
+    /**
+     * Creates a clone of this linker with the same contexts, functions and shared
+     * memories.
+     * 
+     * @param store The store to use for the new linker.
+     * @return A new WasmtimeLinker instance with the same contexts, functions and
+     *         shared memories.
+     */
+    public WasmtimeLinker createClone(WasmtimeStore store) {
+        WasmtimeLinker result = new WasmtimeLinker(this.engine, store);
+        result.link(this.contexts);
+        return result;
+    }
 }

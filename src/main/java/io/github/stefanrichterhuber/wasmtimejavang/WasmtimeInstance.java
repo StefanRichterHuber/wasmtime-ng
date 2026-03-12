@@ -15,7 +15,7 @@ public final class WasmtimeInstance implements AutoCloseable {
 
     private native long createInstance(long modulePtr, long storePtr, long linkerPtr);
 
-    private native void closeInstance(long instancePtr, long storePtr);
+    private native void closeInstance(long instancePtr);
 
     private native Object[] runWasmFunc(long storePtr, long instancePtr, String name, Object[] params);
 
@@ -42,7 +42,7 @@ public final class WasmtimeInstance implements AutoCloseable {
     @Override
     public void close() throws Exception {
         if (instancePtr != 0) {
-            this.closeInstance(instancePtr, this.store.getStorePtr());
+            this.closeInstance(instancePtr);
         }
         instancePtr = 0;
     }
@@ -65,6 +65,16 @@ public final class WasmtimeInstance implements AutoCloseable {
      */
     public Object[] invoke(String name, Object... args) {
         return runWasmFunc(this.store.getStorePtr(), this.instancePtr, name, args);
+    }
+
+    /**
+     * Invokes the _start (usually does some initializations and then calls main)
+     * function of the instance (Present in WASI modules)
+     * 
+     * @return A list of result values from the function call.
+     */
+    public Object[] start() {
+        return invoke("_start");
     }
 
     /**

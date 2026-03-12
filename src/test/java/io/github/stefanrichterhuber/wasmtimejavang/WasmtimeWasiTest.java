@@ -31,7 +31,7 @@ public class WasmtimeWasiTest {
                     .withStdErr(new LoggerOutputStream("wasip1test", Level.ERROR)));
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-                Object[] result = instance.invoke("_start");
+                Object[] result = instance.start();
                 assertNotNull(result);
             }
 

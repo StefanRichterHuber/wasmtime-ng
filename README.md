@@ -197,7 +197,7 @@ try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix())) {
 There is some preliminary support for WASI threads using the additional context `WasiThreadContext`.
 
 ```java
-try (FileInputStream fis = new FileInputStream(wasmPath.toFile());
+ try (FileInputStream fis = new FileInputStream(wasmPath.toFile());
         WasmtimeEngine engine = new WasmtimeEngine();
         WasmtimeModule module = new WasmtimeModule(engine, fis);
         WasmtimeStore store = new WasmtimeStore(engine);
@@ -210,13 +210,14 @@ try (FileInputStream fis = new FileInputStream(wasmPath.toFile());
             .withStdOut(System.out)
             .withStdErr(System.err);
 
-    WasiThreadContext threadContext = new WasiThreadContext(engine, module, sharedMemory, List.of(wasiContext));
+    WasiThreadContext threadContext = new WasiThreadContext();
 
+    linker.defineSharedMemory("env", "memory", sharedMemory);
     linker.link(wasiContext);
     linker.link(threadContext);
 
     try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-        instance.invoke("_start", List.of());
+         instance.start();
     }
 
     // Give some time for threads to finish and print

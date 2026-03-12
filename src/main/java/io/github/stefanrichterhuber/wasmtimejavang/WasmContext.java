@@ -40,4 +40,11 @@ public interface WasmContext {
      */
     List<Importmemory> getMemories();
 
+    /**
+     * Returns the name of this context.
+     * 
+     * @return The name of this context.
+     */
+    String name();
+
 }

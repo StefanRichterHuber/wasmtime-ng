@@ -23,6 +23,7 @@ bind_java_type! {
         fn get_shorts() -> jshort[],
         fn get_ints() -> jint[],
         fn get_longs() -> jlong[],
+        fn compare_to(other: JV128) -> jint,
     },
 
     is_instance_of = {
@@ -48,8 +49,7 @@ impl<'local> JV128<'local> {
 
         byte_array.set_region(env, 0, signed_value_bytes)?;
 
-        let v128_object = JV128::new_from_bytes(env, &byte_array)?;
-        Ok(v128_object)
+        JV128::new_from_bytes(env, &byte_array)
     }
 
     ///
@@ -62,9 +62,7 @@ impl<'local> JV128<'local> {
         let byte_array = env.new_byte_array(slice.len())?;
 
         byte_array.set_region(env, 0, slice)?;
-
-        let v128_object = JV128::new_from_bytes(env, &byte_array)?;
-        Ok(v128_object)
+        JV128::new_from_bytes(env, &byte_array)
     }
 
     pub fn into_byte_slice(

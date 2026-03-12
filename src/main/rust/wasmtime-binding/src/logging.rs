@@ -35,10 +35,12 @@ pub fn init_logging<'local>(
 
         let log_context = JavaLogContext { vm, level: lvl };
 
-        log::set_boxed_logger(Box::new(log_context))
-            .map(|()| log::set_max_level(filter))
-            .unwrap();
-        log::debug!("Native logging redirect to java log4j initialized");
+        match log::set_boxed_logger(Box::new(log_context)).map(|()| log::set_max_level(filter)) {
+            Ok(_) => log::debug!("Native logging redirect to java log4j initialized"),
+            Err(_) => {
+                log::warn!("Native logging redirect already configured. Second configuration fails")
+            }
+        };
     }
     Ok(())
 }

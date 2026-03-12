@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use crate::java_numbers::JDouble;
 use crate::java_numbers::JFloat;
 use crate::java_numbers::JInteger;
@@ -10,6 +12,7 @@ use crate::wasmmemory::JWasmtimeLocalMemory;
 use crate::wasmmodule::JWasmtimeModule;
 use crate::wasmmodule::ModuleHandle;
 use crate::wasmstore::JWasmtimeStore;
+use crate::wasmstore::StoreContent;
 use crate::wasmstore::StoreHandle;
 use crate::wasmtime_v128::JV128;
 use crate::wasmtimefuncref::JWasmtimeFuncRef;
@@ -25,6 +28,8 @@ use jni::{
     sys::{jlong, jsize},
 };
 use log::{debug, error, warn};
+use wasmtime::AsContext;
+use wasmtime::AsContextMut;
 use wasmtime::ValType;
 use wasmtime::{ExternRef, Instance, RefType, Val};
 
@@ -91,9 +96,82 @@ bind_java_type! {
 
     native_methods {
         extern fn create_instance(module: ModuleHandle, store: StoreHandle, linker: LinkerHandle ) -> jlong,
-        extern fn close_instance(instance: InstanceHandle, store: StoreHandle,),
+        extern fn close_instance(instance: InstanceHandle),
         extern fn run_wasm_func(store: StoreHandle, instance: InstanceHandle, name: JString, parameters: JObject[]) -> JObject[],
         extern fn get_function_reference(store: StoreHandle,instance: InstanceHandle, name: JString) -> JWasmtimeFuncRef,
+    }
+}
+
+thread_local! {
+    static ACTIVE_INSTANCE: RefCell<Vec<Global<JWasmtimeInstance<'static>>>> = RefCell::new(Vec::new());
+}
+
+struct InstanceGuard(bool);
+impl Drop for InstanceGuard {
+    fn drop(&mut self) {
+        if self.0 {
+            ACTIVE_INSTANCE.with(|stack| stack.borrow_mut().pop());
+            debug!("InstanceGuard dropped, with pop");
+        } else {
+            debug!("InstanceGuard dropped, without pop, since same instance was already on stack");
+        }
+    }
+}
+
+///
+/// Ensures that there is always a JWasmtimeInstance object available.
+/// Each time a function is called with a JWasmtimeInstance it is pushed on the thread local stack.
+/// If the same instance is called multiple times, it is not pushed again.
+/// If no instance is provided, the last instance on the stack is used.
+///
+pub fn with_instance<'local, F, R>(
+    env: &mut ::jni::Env<'local>,
+    instance: Option<Global<JWasmtimeInstance<'static>>>,
+    f: F,
+) -> Result<R, jni::errors::Error>
+where
+    F: FnOnce(
+        &mut ::jni::Env<'local>,
+        &Global<JWasmtimeInstance<'static>>,
+    ) -> Result<R, jni::errors::Error>,
+{
+    if let Some(current_instance) = instance {
+        let _guard: Result<InstanceGuard, jni::errors::Error> = ACTIVE_INSTANCE.with(|stack| {
+            let mut s = stack.borrow_mut();
+
+            if let Some(current) = s.last() {
+                // If the last instance on the stack is the same as the given one, don't push another copy and return a no-op guard
+                if env.is_same_object(&current_instance, &current)? {
+                    debug!("With instance: {:?} (same)", current_instance);
+                    Ok(InstanceGuard(false))
+                } else {
+                    let global_copy = env.new_global_ref(&current_instance)?;
+                    debug!("With instance: {:?} (new)", global_copy);
+                    s.push(global_copy);
+                    Ok(InstanceGuard(true))
+                }
+            } else {
+                let global_copy = env.new_global_ref(&current_instance)?;
+                debug!("With instance: {:?} (new, none before)", global_copy);
+                s.push(global_copy);
+                Ok(InstanceGuard(true))
+            }
+        });
+        let _guard = _guard?;
+        f(env, &current_instance)
+    } else {
+        ACTIVE_INSTANCE
+            .with(|stack| match stack.borrow().last() {
+                Some(reference) => {
+                    debug!("Found instance on instance stack: {:?}", reference);
+                    env.new_global_ref(reference)
+                }
+                None => {
+                    error!("No instance on instance stack");
+                    Err(jni::errors::Error::NullPtr("No instance on stack"))
+                }
+            })
+            .and_then(|global| f(env, &global))
     }
 }
 
@@ -104,12 +182,8 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         _env: &mut ::jni::Env<'local>,
         _this: JWasmtimeInstance<'local>,
         instance: InstanceHandle,
-        store: StoreHandle,
     ) -> ::std::result::Result<(), Self::Error> {
         debug!("Closing Instance");
-        // Remove the instance from the store map
-        unsafe { store.as_ref() }.data_mut().instance = None;
-
         drop(unsafe { instance.into_box() });
         debug!("Instance closed successfully");
         Ok(())
@@ -117,67 +191,71 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
 
     fn run_wasm_func<'local>(
         env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeInstance<'local>,
+        this: JWasmtimeInstance<'local>,
         store: StoreHandle,
         instance: InstanceHandle,
         name: ::jni::objects::JString<'local>,
         parameters: ::jni::objects::JObjectArray<'local>,
     ) -> ::std::result::Result<::jni::objects::JObjectArray<'local>, Self::Error> {
         let instance = unsafe { instance.as_ref() };
+        let instance_obj = env.new_global_ref(this)?;
         let name = name.to_string();
-        let s = unsafe { store.as_ref() };
 
-        let result = match instance.get_func(&mut *s, &name) {
-            Some(func) => {
-                let s = unsafe { store.as_ref() };
-                let param_types: Vec<wasmtime::ValType> = func.ty(&mut *s).params().collect();
-                let result_types: Vec<wasmtime::ValType> = func.ty(&mut *s).results().collect();
-                let args = convert_java_array_to_val_vector(env, store, parameters, &param_types)?;
+        let result = with_instance(env, Some(instance_obj), |env, _| {
+            match instance.get_func(store, &name) {
+                Some(func) => {
+                    let param_types: Vec<wasmtime::ValType> = func.ty(store).params().collect();
+                    let result_types: Vec<wasmtime::ValType> = func.ty(store).results().collect();
+                    let args =
+                        convert_java_array_to_val_vector(env, store, parameters, &param_types)?;
 
-                let result_len = result_types.len();
-                let mut results = vec![Val::I64(0); result_len];
-                match func.call(unsafe { store.as_ref() }, &args, &mut results) {
-                    Ok(()) => {
-                        debug!("Successfully called function {}", name);
-                        convert_val_vector_to_java_array(env, store, &results)?
-                    }
-                    Err(e) => {
-                        handle_wasmtime_error(env, e)?;
-                        empty_array(env, result_len.try_into().unwrap())?
+                    let result_len = result_types.len();
+                    let mut results = vec![Val::I64(0); result_len];
+
+                    match func.call(store, &args, &mut results) {
+                        Ok(()) => {
+                            debug!("Successfully called function {}", name);
+                            convert_val_vector_to_java_array(env, &store, &results)
+                        }
+                        Err(e) => {
+                            handle_wasmtime_error(env, e)?;
+                            empty_array(env, result_len.try_into().unwrap())
+                        }
                     }
                 }
+                None => {
+                    let msg = format!("No function found with name {}", name);
+                    let msg = JNIString::from(msg);
+                    env.throw_new(jni_str!("java/lang/RuntimeException"), msg)?;
+                    empty_array(env, 0)
+                }
             }
-            None => {
-                let msg = format!("No function found with name {}", name);
-                let msg = JNIString::from(msg);
-                env.throw_new(jni_str!("java/lang/RuntimeException"), msg)?;
-                empty_array(env, 0)?
-            }
-        };
-        Ok(result)
+        });
+        result
     }
 
     fn create_instance<'local>(
         env: &mut ::jni::Env<'local>,
-        this: JWasmtimeInstance<'local>,
+        _this: JWasmtimeInstance<'local>,
         module: ModuleHandle,
         store: StoreHandle,
         linker: LinkerHandle,
     ) -> ::std::result::Result<::jni::sys::jlong, Self::Error> {
         let linker = unsafe { linker.as_ref() };
-
-        let result = match linker.instantiate(unsafe { store.as_ref() }, unsafe { module.as_ref() })
-        {
-            Ok(i) => InstanceHandle::new(i).into(),
+        debug!("Start createing new instance");
+        let result = match linker.instantiate(store, unsafe { module.as_ref() }) {
+            Ok(i) => {
+                debug!("Successfully created new instance: {:?}", i);
+                InstanceHandle::new(i).into()
+            }
             Err(e) => {
+                error!("Failed to create new instance: {}", e);
                 handle_wasmtime_error(env, e)?;
                 0
             }
         };
 
         // Store a reference to the java instance in the store
-        let global_this = env.new_global_ref(this)?;
-        unsafe { store.as_ref() }.data_mut().instance = Some(global_this);
         debug!("Created Instance");
         Ok(result)
     }
@@ -191,10 +269,10 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
     ) -> ::std::result::Result<JWasmtimeFuncRef<'local>, Self::Error> {
         let instance = unsafe { instance.as_ref() };
         let name = name.to_string();
-        let func = instance.get_func(unsafe { store.as_ref() }, &name);
+        let func = instance.get_func(store, &name);
 
         if let Some(f) = func {
-            let func_object = JWasmtimeFuncRef::from_func(env, store, f)?;
+            let func_object = JWasmtimeFuncRef::from_func(env, &store, f)?;
             Ok(func_object)
         } else {
             Ok(JWasmtimeFuncRef::null())
@@ -244,11 +322,14 @@ impl ExternRefContainer {
 ///
 /// Converts a wasmtime Val to a java object
 ///
-pub fn convert_val_to_java_object<'local>(
+pub fn convert_val_to_java_object<'local, T>(
     env: &mut ::jni::Env<'local>,
-    store: StoreHandle,
+    store: &T,
     value: &Val,
-) -> Result<JObject<'local>, jni::errors::Error> {
+) -> Result<JObject<'local>, jni::errors::Error>
+where
+    T: AsContext<Data = StoreContent>,
+{
     let obj: Option<JObject> = match value {
         Val::I32(v) => {
             let obj = JInteger::value_of(env, *v)?;
@@ -282,7 +363,7 @@ pub fn convert_val_to_java_object<'local>(
         Val::ExternRef(rooted) => {
             if let Some(reference) = rooted {
                 let global = reference
-                    .data(unsafe { store.as_ref() })
+                    .data(&store)
                     .and_then(|global| {
                         global.ok_or(wasmtime::Error::msg("failed to unpack externref"))
                     })
@@ -330,11 +411,14 @@ pub fn convert_val_to_java_object<'local>(
 ///
 /// Converts a vec<Val> to a java Object[]
 ///
-pub fn convert_val_vector_to_java_array<'local>(
+pub fn convert_val_vector_to_java_array<'local, T>(
     env: &mut ::jni::Env<'local>,
-    store: StoreHandle,
+    store: &T,
     values: &[Val],
-) -> Result<JObjectArray<'local>, jni::errors::Error> {
+) -> Result<JObjectArray<'local>, jni::errors::Error>
+where
+    T: AsContext<Data = StoreContent>,
+{
     let len = values.len();
 
     let array = env.new_object_array(
@@ -354,12 +438,15 @@ pub fn convert_val_vector_to_java_array<'local>(
 ///
 ///  Converts a single java object into the corresponding wasm Val
 ///
-pub fn convert_java_object_to_val<'local>(
+pub fn convert_java_object_to_val<'local, T>(
     env: &mut ::jni::Env<'local>,
-    store: StoreHandle,
+    store: T,
     item: JObject<'local>,
     val_type: &ValType,
-) -> Result<Val, jni::errors::Error> {
+) -> Result<Val, jni::errors::Error>
+where
+    T: AsContextMut<Data = StoreContent>,
+{
     let val = match val_type {
         wasmtime::ValType::I32 => {
             if item.is_null() {
@@ -428,8 +515,7 @@ pub fn convert_java_object_to_val<'local>(
                 debug!("Creating EXTERNREF from any java object");
                 let global_item = env.new_global_ref(item)?;
                 let container = ExternRefContainer::new(global_item);
-                let r = ExternRef::new(unsafe { store.as_ref() }, container)
-                    .and_then(|r| Ok(Val::ExternRef(Some(r))));
+                let r = ExternRef::new(store, container).and_then(|r| Ok(Val::ExternRef(Some(r))));
 
                 match r {
                     Ok(r) => r,
@@ -454,19 +540,22 @@ pub fn convert_java_object_to_val<'local>(
 ///
 /// Converts  a java Object[] to a vec<Val>  
 ///
-pub fn convert_java_array_to_val_vector<'local>(
+pub fn convert_java_array_to_val_vector<'local, T>(
     env: &mut ::jni::Env<'local>,
-    store: StoreHandle,
+    mut store: T,
     values: JObjectArray,
     param_types: &[wasmtime::ValType],
-) -> Result<Vec<Val>, jni::errors::Error> {
+) -> Result<Vec<Val>, jni::errors::Error>
+where
+    T: AsContextMut<Data = StoreContent>,
+{
     let array_len = values.len(env)?;
 
     let mut result = Vec::with_capacity(array_len);
     for index in 0..array_len {
         let item = values.get_element(env, index)?;
         let val_type = param_types.get(index).unwrap();
-        let val = convert_java_object_to_val(env, store, item, val_type)?;
+        let val = convert_java_object_to_val(env, &mut store, item, val_type)?;
         result.push(val);
     }
     Ok(result)

@@ -80,9 +80,8 @@ impl JWasmtimeModuleNativeInterface for JWasmtimeModuleAPI {
         let address = env.get_direct_buffer_address(&src)?;
         let size = env.get_direct_buffer_capacity(&src)?;
 
-        let script: &mut [u8] = unsafe { core::slice::from_raw_parts_mut(address, size) };
+        let script: &[u8] = unsafe { core::slice::from_raw_parts(address, size) };
 
-        // TODO convert wasmtime error to jni error
         let module = match Module::new(unsafe { engine.as_ref() }, script) {
             Ok(module) => ModuleHandle::new(module).into(),
             Err(e) => {

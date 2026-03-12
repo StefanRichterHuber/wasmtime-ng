@@ -1,5 +1,6 @@
 use crate::wasminstance::{
     convert_java_array_to_val_vector, convert_val_vector_to_java_array, handle_wasmtime_error,
+    with_instance,
 };
 use crate::wasmsharedmemory::SharedMemoryHandle;
 use crate::wasmstore::StoreHandle;
@@ -10,7 +11,7 @@ use crate::{
     wasmstore::JWasmtimeStore, wasmstore::StoreContent,
 };
 use jni::{bind_java_type, sys::jlong};
-use log::{debug, error};
+use log::debug;
 use wasmtime::{Func, FuncType, Linker};
 
 #[repr(transparent)]
@@ -136,58 +137,62 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         let func = env.new_global_ref(func)?;
         let jvm = env.get_java_vm()?;
 
-        let dynamic_func = Func::new(
-            unsafe { store.as_ref() },
-            signature,
-            move |caller, args, returns| {
-                debug!("Dynamic call of triggered with {} arguments!", args.len());
-                let result: std::result::Result<Vec<wasmtime::Val>, jni::errors::Error> = jvm
-                    .attach_current_thread(|env| {
+        let dynamic_func = Func::new(store, signature, move |mut caller, args, returns| {
+            debug!("Dynamic call of triggered with {} arguments!", args.len());
+
+            // To prevent aliasing violations (Undefined Behavior) when Java calls back into Rust (re-entrancy),
+            // we register the current active `Caller` in thread-local storage for this specific `Store`.
+            // Any native method called during this JNI invocation that takes a `StoreHandle` will
+            // now safely use this `Caller` context instead of attempting to create a second
+            // mutable reference to the same `Store`.
+            let store_ptr_val = caller
+                .data()
+                .store_content_ptr
+                .expect("Store pointer missing in StoreContent")
+                as usize;
+            let _guard = crate::wasmstore::CallerGuard::new(store_ptr_val, &mut caller);
+
+            let result: std::result::Result<Vec<wasmtime::Val>, jni::errors::Error> = jvm
+                .attach_current_thread(|env| {
+                    with_instance(env, None, |env, instance_obj| {
                         // We need to the the instance object from the store map
                         let java_map = &caller.data().context;
-                        let instance_obj = match caller.data().instance.as_ref() {
-                            Some(instance) => instance,
-                            None =>  {
-                                 error!("Field instance not found in store"); 
-                                 return Err(jni::errors::Error::FieldNotFound { name: "instance".to_owned(), sig: "io/github/stefanrichterhuber/wasmtimejavang/WasmtimeInstance".to_owned() }); 
-                            },
-                        };
 
                         // Convert the args to a JObjectArray
-                        let args_array = convert_val_vector_to_java_array(env, store,args)?;
+                        let args_array = convert_val_vector_to_java_array(env, &caller, args)?;
                         let result_array = func.call(env, instance_obj, java_map, args_array)?;
                         env.exception_catch()?;
-                        let result = convert_java_array_to_val_vector(env, store, result_array,&results)?;
+                        let result = convert_java_array_to_val_vector(
+                            env,
+                            &mut caller,
+                            result_array,
+                            &results,
+                        )?;
 
                         debug!("Dynamic call was successfull: {:?}", result);
 
                         Ok(result)
-                    });
+                    })
+                });
 
-                match result {
-                    Ok(values) => {
-                        for (i, v) in values.iter().enumerate() {
-                            if i < returns.len() {
-                                returns[i] = *v;
-                            }
+            match result {
+                Ok(values) => {
+                    for (i, v) in values.iter().enumerate() {
+                        if i < returns.len() {
+                            returns[i] = *v;
                         }
-                        Ok(())
                     }
-                    Err(e) => {
-                        debug!("Failed to invoke java function {}: {}", func_name, e);
-                        Err(convert_jvm_error_to_wasmtime_error(e))
-                    }
+                    Ok(())
                 }
-            },
-        );
+                Err(e) => {
+                    debug!("Failed to invoke java function {}: {}", func_name, e);
+                    Err(convert_jvm_error_to_wasmtime_error(e))
+                }
+            }
+        });
         // 3. Add to Linker
         let linker = unsafe { linker.as_ref() };
-        match linker.define(
-            unsafe { store.as_ref() },
-            &module.to_string(),
-            &name.to_string(),
-            dynamic_func,
-        ) {
+        match linker.define(store, &module.to_string(), &name.to_string(), dynamic_func) {
             Ok(_) => Ok(()),
             Err(e) => handle_wasmtime_error(env, e),
         }
@@ -202,14 +207,13 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         module: ::jni::objects::JString<'local>,
         name: ::jni::objects::JString<'local>,
     ) -> ::std::result::Result<(), Self::Error> {
-        let store = unsafe { store.as_ref() };
         let linker = unsafe { linker.as_ref() };
         let shared_memory = unsafe { shared_memory.as_ref() };
         let module = module.to_string();
         let name = name.to_string();
 
         linker.allow_shadowing(true);
-        match linker.define(&mut *store, &module, &name, shared_memory.clone()) {
+        match linker.define(store, &module, &name, shared_memory.clone()) {
             Ok(_) => Ok(()),
             Err(e) => handle_wasmtime_error(env, e),
         }

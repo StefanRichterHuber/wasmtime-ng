@@ -9,6 +9,8 @@ public interface WasmtimeMemory {
      * Returns a ByteBuffer view of the WASM memory.
      * The buffer is cached and refreshed if the memory size changes.
      * 
+     * Warning: Do not cache this reference, but fetch it everytime prior to use!
+     * 
      * @return A ByteBuffer mapping the WASM memory.
      */
     ByteBuffer buffer();
