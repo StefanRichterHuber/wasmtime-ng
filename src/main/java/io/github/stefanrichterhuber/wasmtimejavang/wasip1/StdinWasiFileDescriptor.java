@@ -5,9 +5,17 @@ import java.io.InputStream;
 
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeMemory;
 
+/**
+ * WasiFileDecriptor reading all input from a given InputStream
+ */
 public final class StdinWasiFileDescriptor extends WasiFileDescriptor {
     private final InputStream is;
 
+    /**
+     * Creates a new StdinWasiFileDescriptor from a InputStream
+     * 
+     * @param is InputStream to read from
+     */
     public StdinWasiFileDescriptor(InputStream is) {
         super(WasiRights.FD_READ, 0);
         this.is = is;

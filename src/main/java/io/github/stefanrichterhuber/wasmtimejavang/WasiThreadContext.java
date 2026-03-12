@@ -36,11 +36,6 @@ public class WasiThreadContext implements WasmContext {
 
     /**
      * Creates a new WasiThreadContext.
-     * 
-     * @param engine       The engine to use for creating new stores and
-     *                     linkers.
-     * @param module       The module to re-instantiate in new threads.
-     * @param sharedMemory The shared memory to link to new threads.
      */
     public WasiThreadContext() {
     }

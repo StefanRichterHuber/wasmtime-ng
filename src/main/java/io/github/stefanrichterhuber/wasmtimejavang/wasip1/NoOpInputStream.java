@@ -3,6 +3,9 @@ package io.github.stefanrichterhuber.wasmtimejavang.wasip1;
 import java.io.IOException;
 import java.io.InputStream;
 
+/**
+ * A no-op InputStream which has no bytes available
+ */
 public final class NoOpInputStream extends InputStream {
 
     @Override
