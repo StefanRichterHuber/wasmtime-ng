@@ -2,6 +2,10 @@ package io.github.stefanrichterhuber.wasmtimejavang;
 
 import io.questdb.jar.jni.JarJniLoader;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -80,6 +84,8 @@ public final class WasmtimeEngine implements AutoCloseable {
 
     private native void closeEngine(long enginePtr);
 
+    private native byte[] precompile(long enginePtr, ByteBuffer wat);
+
     /**
      * Creates a new WasmtimeEngine.
      */
@@ -105,5 +111,45 @@ public final class WasmtimeEngine implements AutoCloseable {
             this.closeEngine(this.enginePtr);
         }
         enginePtr = 0;
+    }
+
+    /**
+     * Precompiles a wat / wasm file into cwasm
+     * 
+     * @param wat Source string
+     * @return cwasm file content
+     */
+    public byte[] precompile(String wat) {
+        return precompile(WasmtimeModule.createByteBuffer(wat));
+    }
+
+    /**
+     * Precompiles a wat / wasm file into cwasm
+     * 
+     * @param source Source byte array
+     * @return cwasm file content
+     */
+    public byte[] precompile(byte[] source) {
+        return precompile(WasmtimeModule.createByteBuffer(source));
+    }
+
+    /**
+     * Precompiles a wat / wasm file into cwasm
+     * 
+     * @param is InputStream
+     * @return cwasm file content
+     */
+    public byte[] precompile(InputStream is) throws IOException {
+        return precompile(WasmtimeModule.createByteBuffer(is));
+    }
+
+    /**
+     * Precompiles a wat / wasm file into cwasm
+     * 
+     * @param source Source ByteBuffer
+     * @return cwasm file content
+     */
+    public byte[] precompile(ByteBuffer source) {
+        return this.precompile(this.getEnginePtr(), WasmtimeModule.createByteBuffer(source));
     }
 }
