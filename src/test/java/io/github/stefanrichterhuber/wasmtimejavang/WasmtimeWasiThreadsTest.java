@@ -1,7 +1,5 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import java.io.FileInputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
