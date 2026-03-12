@@ -1,5 +1,7 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.io.FileInputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -28,13 +30,14 @@ public class WasmtimeWasiThreadsTest {
                     .withStdOut(System.out)
                     .withStdErr(System.err);
 
-            WasiThreadContext threadContext = new WasiThreadContext(engine, module, sharedMemory, List.of(wasiContext));
+            WasiThreadContext threadContext = new WasiThreadContext();
 
+            linker.defineSharedMemory("env", "memory", sharedMemory);
             linker.link(wasiContext);
             linker.link(threadContext);
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-                instance.invoke("_start");
+                instance.start();
             }
 
             // Give some time for threads to finish and print

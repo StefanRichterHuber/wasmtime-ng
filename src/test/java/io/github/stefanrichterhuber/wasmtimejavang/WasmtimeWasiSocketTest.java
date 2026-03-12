@@ -60,7 +60,7 @@ public class WasmtimeWasiSocketTest {
 
             // Run the WASM module
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-                Object[] result = instance.invoke("_start");
+                Object[] result = instance.start();
                 assertNotNull(result);
             }
 

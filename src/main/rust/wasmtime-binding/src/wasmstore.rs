@@ -1,6 +1,4 @@
-use crate::{
-    wasmengine::EngineHandle, wasmengine::JWasmtimeEngine, wasminstance::JWasmtimeInstance,
-};
+use crate::{wasmengine::EngineHandle, wasmengine::JWasmtimeEngine};
 use jni::{bind_java_type, objects::JMap, refs::Global, sys::jlong};
 use log::debug;
 use std::cell::RefCell;
@@ -50,7 +48,6 @@ impl Drop for CallerGuard {
 ///
 pub struct StoreContent {
     pub context: Global<JMap<'static>>,
-    pub instance: Option<Global<JWasmtimeInstance<'static>>>,
     pub store_content_ptr: Option<*mut Store<StoreContent>>,
 }
 
@@ -58,7 +55,6 @@ impl StoreContent {
     pub fn new(context: Global<JMap<'static>>) -> Self {
         StoreContent {
             context,
-            instance: None,
             store_content_ptr: None,
         }
     }

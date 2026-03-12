@@ -1,5 +1,6 @@
 use crate::wasminstance::{
     convert_java_array_to_val_vector, convert_val_vector_to_java_array, handle_wasmtime_error,
+    with_instance,
 };
 use crate::wasmsharedmemory::SharedMemoryHandle;
 use crate::wasmstore::StoreHandle;
@@ -10,7 +11,7 @@ use crate::{
     wasmstore::JWasmtimeStore, wasmstore::StoreContent,
 };
 use jni::{bind_java_type, sys::jlong};
-use log::{debug, error};
+use log::debug;
 use wasmtime::{Func, FuncType, Linker};
 
 #[repr(transparent)]
@@ -141,41 +142,37 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
 
             // To prevent aliasing violations (Undefined Behavior) when Java calls back into Rust (re-entrancy),
             // we register the current active `Caller` in thread-local storage for this specific `Store`.
-            // Any native method called during this JNI invocation that takes a `StoreHandle` will 
-            // now safely use this `Caller` context instead of attempting to create a second 
+            // Any native method called during this JNI invocation that takes a `StoreHandle` will
+            // now safely use this `Caller` context instead of attempting to create a second
             // mutable reference to the same `Store`.
             let store_ptr_val = caller
                 .data()
                 .store_content_ptr
-                .expect("Store pointer missing in StoreContent") as usize;
+                .expect("Store pointer missing in StoreContent")
+                as usize;
             let _guard = crate::wasmstore::CallerGuard::new(store_ptr_val, &mut caller);
 
             let result: std::result::Result<Vec<wasmtime::Val>, jni::errors::Error> = jvm
                 .attach_current_thread(|env| {
-                    // We need to the the instance object from the store map
-                    let java_map = &caller.data().context;
-                    let instance_obj = match caller.data().instance.as_ref() {
-                        Some(instance) => instance,
-                        None => {
-                            error!("Field instance not found in store");
-                            return Err(jni::errors::Error::FieldNotFound {
-                                name: "instance".to_owned(),
-                                sig: "io/github/stefanrichterhuber/wasmtimejavang/WasmtimeInstance"
-                                    .to_owned(),
-                            });
-                        }
-                    };
+                    with_instance(env, None, |env, instance_obj| {
+                        // We need to the the instance object from the store map
+                        let java_map = &caller.data().context;
 
-                    // Convert the args to a JObjectArray
-                    let args_array = convert_val_vector_to_java_array(env, &caller, args)?;
-                    let result_array = func.call(env, instance_obj, java_map, args_array)?;
-                    env.exception_catch()?;
-                    let result =
-                        convert_java_array_to_val_vector(env, &mut caller, result_array, &results)?;
+                        // Convert the args to a JObjectArray
+                        let args_array = convert_val_vector_to_java_array(env, &caller, args)?;
+                        let result_array = func.call(env, instance_obj, java_map, args_array)?;
+                        env.exception_catch()?;
+                        let result = convert_java_array_to_val_vector(
+                            env,
+                            &mut caller,
+                            result_array,
+                            &results,
+                        )?;
 
-                    debug!("Dynamic call was successfull: {:?}", result);
+                        debug!("Dynamic call was successfull: {:?}", result);
 
-                    Ok(result)
+                        Ok(result)
+                    })
                 });
 
             match result {

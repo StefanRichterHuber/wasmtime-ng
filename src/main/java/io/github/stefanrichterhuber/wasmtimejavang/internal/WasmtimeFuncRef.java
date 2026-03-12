@@ -9,7 +9,7 @@ final class WasmtimeFuncRef implements WasmtimeFunction {
     private final long funcPtr;
     private final long storePtr;
 
-    private native Object[] invokeNativeFunc(long funcPtr, long storePtr, Object instance,
+    private native Object[] invokeNativeFunc(long funcPtr, long storePtr, WasmtimeInstance instance,
             Map<String, Object> context,
             Object[] args);
 

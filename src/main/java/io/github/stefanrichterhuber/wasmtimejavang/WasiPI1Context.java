@@ -158,7 +158,8 @@ public class WasiPI1Context implements WasmContext {
         if (path.isEmpty() || path.equals("."))
             return base;
 
-        // Ensure the path is resolved and normalized within the base directory to prevent path traversal
+        // Ensure the path is resolved and normalized within the base directory to
+        // prevent path traversal
         Path resolved = base.resolve(path).normalize().toAbsolutePath();
         Path absoluteBase = base.normalize().toAbsolutePath();
 
@@ -1725,6 +1726,11 @@ public class WasiPI1Context implements WasmContext {
     @Override
     public List<Importmemory> getMemories() {
         return List.of();
+    }
+
+    @Override
+    public String name() {
+        return "wasi_snapshot_preview1";
     }
 
 }

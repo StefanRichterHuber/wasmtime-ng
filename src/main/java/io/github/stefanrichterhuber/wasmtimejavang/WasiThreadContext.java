@@ -17,23 +17,17 @@ import org.apache.logging.log4j.Logger;
  * new instance.
  */
 public class WasiThreadContext implements WasmContext {
+    /**
+     * The name of the wasi_thread_start function. Called by the new thread.
+     */
+    private static final String WASI_THREAD_START = "wasi_thread_start";
+
     private static final Logger LOGGER = LogManager.getLogger();
 
     /**
      * The main memory of the application
      */
     private static final String STD_MEMORY = "memory";
-
-    private final WasmtimeEngine engine;
-    private final WasmtimeModule module;
-    private final WasmtimeSharedMemory sharedMemory;
-
-    /**
-     * WasmContext to use for threads
-     * <br>
-     * Thread safety: Read-only after start
-     */
-    private final List<WasmContext> threadContexts = new ArrayList<>();
 
     /**
      * Generator for thread IDs.
@@ -43,28 +37,17 @@ public class WasiThreadContext implements WasmContext {
     /**
      * Creates a new WasiThreadContext.
      * 
-     * @param engine          The engine to use for creating new stores and
-     *                        linkers.
-     * @param module          The module to re-instantiate in new threads.
-     * @param sharedMemory    The shared memory to link to new threads.
-     * @param initialContexts The initial list of contexts to be linked in new
-     *                        threads.
+     * @param engine       The engine to use for creating new stores and
+     *                     linkers.
+     * @param module       The module to re-instantiate in new threads.
+     * @param sharedMemory The shared memory to link to new threads.
      */
-    public WasiThreadContext(WasmtimeEngine engine, WasmtimeModule module, WasmtimeSharedMemory sharedMemory,
-            List<WasmContext> initialContexts) {
-        this.engine = engine;
-        this.module = module;
-        this.sharedMemory = sharedMemory;
-        if (initialContexts != null) {
-            this.threadContexts.addAll(initialContexts);
-        }
-        // Add itself to geht other threads to start other threads themselves
-        this.threadContexts.add(this);
+    public WasiThreadContext() {
     }
 
     @Override
     public List<Importmemory> getMemories() {
-        return List.of(new Importmemory("env", "memory", sharedMemory));
+        return List.of();
     }
 
     @Override
@@ -99,21 +82,12 @@ public class WasiThreadContext implements WasmContext {
         }
 
         final Thread thread = new Thread(() -> {
-            try (WasmtimeStore threadStore = new WasmtimeStore(engine, context);
-                    WasmtimeLinker threadLinker = new WasmtimeLinker(engine, threadStore)) {
-
-                // Link all contexts to the new linker
-                for (WasmContext ctx : threadContexts) {
-                    threadLinker.link(ctx);
-                }
-
-                // Link the shared memory
-                threadLinker.defineSharedMemory("env", "memory", sharedMemory);
-
+            try (WasmtimeStore threadStore = instance.getStore().createClone();
+                    WasmtimeLinker threadLinker = instance.getLinker().createClone(threadStore)) {
                 try (WasmtimeInstance threadInstance = new WasmtimeInstance(threadStore,
-                        module,
+                        instance.getModule(),
                         threadLinker)) {
-                    threadInstance.invoke("wasi_thread_start", new Object[] { Long.valueOf(tid), Long.valueOf(arg) });
+                    threadInstance.invoke(WASI_THREAD_START, tid, arg);
                 } catch (Exception e) {
                     LOGGER.error("Error in wasi-thread start", e);
                 }
@@ -124,6 +98,10 @@ public class WasiThreadContext implements WasmContext {
         thread.start();
 
         return new Object[] { tid };
+    }
 
+    @Override
+    public String name() {
+        return "wasi_threads";
     }
 }

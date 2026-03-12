@@ -1,3 +1,4 @@
+use crate::wasminstance::with_instance;
 use crate::wasmtimefunction::JWasmtimeFunction;
 use crate::{wasminstance::JWasmtimeInstance, wasmstore::StoreContent};
 use jni::{bind_java_type, sys::jlong};
@@ -61,7 +62,7 @@ bind_java_type! {
     },
 
     native_methods {
-        extern fn invoke_native_func(func: FuncHandle, store: StoreHandle, instance: JObject, context: JMap, args: JObject[] ) -> JObject[]
+        extern fn invoke_native_func(func: FuncHandle, store: StoreHandle, instance: JWasmtimeInstance, context: JMap, args: JObject[] ) -> JObject[]
     }
 }
 
@@ -73,29 +74,32 @@ impl JWasmtimeFuncRefNativeInterface for JWasmtimeFuncRefAPI {
         _this: JWasmtimeFuncRef<'local>,
         func: FuncHandle,
         store: StoreHandle,
-        _instance: ::jni::objects::JObject<'local>,
+        instance: JWasmtimeInstance<'local>,
         _context: ::jni::objects::JMap<'local>,
         args: ::jni::objects::JObjectArray<'local, ::jni::objects::JObject<'local>>,
     ) -> ::std::result::Result<::jni::objects::JObjectArray<'local>, Self::Error> {
-        let func = unsafe { func.as_ref() };
-        let param_types: Vec<wasmtime::ValType> = func.ty(store).params().collect();
-        let result_types: Vec<wasmtime::ValType> = func.ty(store).results().collect();
-        let args = convert_java_array_to_val_vector(env, store, args, &param_types)?;
-        let result_len = result_types.len();
-        let mut results = vec![Val::I64(0); result_len];
+        let instance = env.new_global_ref(instance)?;
+        with_instance(env, Some(instance), |env, _| {
+            let func = unsafe { func.as_ref() };
+            let param_types: Vec<wasmtime::ValType> = func.ty(store).params().collect();
+            let result_types: Vec<wasmtime::ValType> = func.ty(store).results().collect();
+            let args = convert_java_array_to_val_vector(env, store, args, &param_types)?;
+            let result_len = result_types.len();
+            let mut results = vec![Val::I64(0); result_len];
 
-        let result = match func.call(store, &args, &mut results) {
-            Ok(()) => {
-                debug!("Successfully called wrapped function");
-                convert_val_vector_to_java_array(env, &store, &results)?
-            }
-            Err(e) => {
-                handle_wasmtime_error(env, e)?;
-                empty_array(env, result_len.try_into().unwrap())?
-            }
-        };
+            let result = match func.call(store, &args, &mut results) {
+                Ok(()) => {
+                    debug!("Successfully called wrapped function");
+                    convert_val_vector_to_java_array(env, &store, &results)?
+                }
+                Err(e) => {
+                    handle_wasmtime_error(env, e)?;
+                    empty_array(env, result_len.try_into().unwrap())?
+                }
+            };
 
-        Ok(result)
+            Ok(result)
+        })
     }
 }
 
