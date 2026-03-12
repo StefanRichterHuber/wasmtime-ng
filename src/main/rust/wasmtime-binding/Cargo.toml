@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-binding"
-version = "0.1.0"
+version = "2.0.2"
 edition = "2024"
 
 [profile.release]
@@ -14,7 +14,7 @@ name = "wasmtimebinding"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasmtime = { version = "42.0.1" }
+wasmtime = { version = "42" }
 jni = { version = "0.22" }
 log = { version = "0.4", features = ["std"] }
 
