@@ -1,5 +1,5 @@
 use crate::{wasmengine::EngineHandle, wasminstance::handle_wasmtime_error};
-use jni::{bind_java_type, sys::jlong};
+use jni::{bind_java_type, objects::JByteBuffer, sys::jlong};
 use log::debug;
 use wasmtime::{MemoryType, SharedMemory};
 
@@ -38,6 +38,10 @@ bind_java_type! {
         unsafe SharedMemoryHandle => long
     },
 
+    fields {
+        buffer: JByteBuffer,
+    },
+
     constructors {
         fn new(engine: EngineHandle, initial_pages: long, max_pages: long),
     },
@@ -63,11 +67,17 @@ impl JWasmtimeSharedMemoryNativeInterface for JWasmtimeSharedMemoryAPI {
     ) -> ::std::result::Result<::jni::sys::jlong, Self::Error> {
         let engine = unsafe { engine.as_ref() };
         let ty = MemoryType::shared(initial_pages as u32, max_pages as u32);
-        let shared_memory = SharedMemory::new(engine, ty).unwrap();
-
-        let result = SharedMemoryHandle::new(shared_memory);
-        debug!("Created SharedMemory");
-        Ok(result.into())
+        match SharedMemory::new(engine, ty) {
+            Ok(shared_memory) => {
+                let result = SharedMemoryHandle::new(shared_memory);
+                debug!("Created SharedMemory");
+                Ok(result.into())
+            }
+            Err(e) => {
+                handle_wasmtime_error(_env, e)?;
+                Err(jni::errors::Error::JavaException)
+            }
+        }
     }
 
     fn close_shared_memory<'local>(
@@ -104,11 +114,12 @@ impl JWasmtimeSharedMemoryNativeInterface for JWasmtimeSharedMemoryAPI {
 
     fn grow_memory<'local>(
         env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeSharedMemory<'local>,
+        this: JWasmtimeSharedMemory<'local>,
         shared_memory: SharedMemoryHandle,
         delta: ::jni::sys::jlong,
     ) -> ::std::result::Result<(), Self::Error> {
         let shared_memory = unsafe { shared_memory.as_ref() };
+        this.set_buffer(env, JByteBuffer::null())?;
         match shared_memory.grow(delta as u64) {
             Ok(_) => Ok(()),
             Err(e) => handle_wasmtime_error(env, e),

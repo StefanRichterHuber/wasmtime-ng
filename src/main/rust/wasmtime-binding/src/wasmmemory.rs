@@ -1,5 +1,7 @@
-use crate::wasminstance::{InstanceHandle, handle_wasmtime_error};
-use crate::wasmstore::StoreHandle;
+use crate::wasminstance::{InstanceHandle, JWasmtimeInstance, handle_wasmtime_error};
+use crate::wasmstore::{JWasmtimeStore, StoreHandle};
+
+use jni::objects::JByteBuffer;
 use jni::{bind_java_type, jni_str, strings::JNIString};
 use log::{debug, error};
 use wasmtime::Extern;
@@ -11,10 +13,16 @@ bind_java_type! {
     type_map = {
         unsafe StoreHandle => long,
         unsafe InstanceHandle => long,
+        JWasmtimeStore => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeStore",
+        JWasmtimeInstance => "io.github.stefanrichterhuber.wasmtimejavang.WasmtimeInstance",
+    },
+
+    fields {
+        buffer: JByteBuffer,
     },
 
     constructors {
-        fn new(instance: InstanceHandle, name: JString)
+        fn new(instance: JWasmtimeInstance, store: JWasmtimeStore, name: JString)
     },
 
     methods {
@@ -36,18 +44,17 @@ impl JWasmtimeLocalMemoryNativeInterface for JWasmtimeLocalMemoryAPI {
         env: &mut ::jni::Env<'local>,
         _this: JWasmtimeLocalMemory<'local>,
         instance: InstanceHandle,
-        store: StoreHandle,
+        mut store: StoreHandle,
         name: ::jni::objects::JString<'local>,
     ) -> ::std::result::Result<::jni::objects::JByteBuffer<'local>, Self::Error> {
         let name = name.to_string();
         let instance = unsafe { instance.as_ref() };
-        let store = unsafe { store.as_ref() };
 
-        let export = instance.get_export(&mut *store, &name);
+        let export = instance.get_export(store, &name);
         match export {
             Some(Extern::Memory(mem)) => {
                 debug!("Accessing single-instance memory {}", name);
-                let data = mem.data_mut(store);
+                let data = mem.data_mut(&mut store);
                 let ptr = data.as_mut_ptr();
                 let len = data.len();
                 let buffer = unsafe { env.new_direct_byte_buffer(ptr, len)? };
@@ -78,9 +85,8 @@ impl JWasmtimeLocalMemoryNativeInterface for JWasmtimeLocalMemoryAPI {
     ) -> ::std::result::Result<::jni::sys::jlong, Self::Error> {
         let name = name.to_string();
         let instance = unsafe { instance.as_ref() };
-        let store = unsafe { store.as_ref() };
 
-        let export = instance.get_export(&mut *store, &name);
+        let export = instance.get_export(store, &name);
         match export {
             Some(Extern::Memory(mem)) => {
                 debug!("Reading size of single-instance memory {}", name);
@@ -100,7 +106,7 @@ impl JWasmtimeLocalMemoryNativeInterface for JWasmtimeLocalMemoryAPI {
 
     fn grow_memory<'local>(
         env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeLocalMemory<'local>,
+        this: JWasmtimeLocalMemory<'local>,
         instance: InstanceHandle,
         store: StoreHandle,
         name: ::jni::objects::JString<'local>,
@@ -108,12 +114,12 @@ impl JWasmtimeLocalMemoryNativeInterface for JWasmtimeLocalMemoryAPI {
     ) -> ::std::result::Result<(), Self::Error> {
         let name = name.to_string();
         let instance = unsafe { instance.as_ref() };
-        let store = unsafe { store.as_ref() };
 
-        let export = instance.get_export(&mut *store, &name);
+        let export = instance.get_export(store, &name);
         match export {
             Some(Extern::Memory(mem)) => {
                 debug!("Growing single-instance memory {} by {} pages", name, delta);
+                this.set_buffer(env, JByteBuffer::null())?;
                 match mem.grow(store, delta.try_into().unwrap()) {
                     Ok(_) => Ok(()),
                     Err(e) => handle_wasmtime_error(env, e),
@@ -121,6 +127,7 @@ impl JWasmtimeLocalMemoryNativeInterface for JWasmtimeLocalMemoryAPI {
             }
             Some(Extern::SharedMemory(mem)) => {
                 debug!("Growing shared memory {} by {} pages", name, delta);
+                this.set_buffer(env, JByteBuffer::null())?;
                 match mem.grow(delta.try_into().unwrap()) {
                     Ok(_) => Ok(()),
                     Err(e) => handle_wasmtime_error(env, e),
@@ -143,9 +150,8 @@ impl JWasmtimeLocalMemoryNativeInterface for JWasmtimeLocalMemoryAPI {
     ) -> ::std::result::Result<::jni::sys::jboolean, Self::Error> {
         let name = name.to_string();
         let instance = unsafe { instance.as_ref() };
-        let store = unsafe { store.as_ref() };
 
-        let export = instance.get_export(&mut *store, &name);
+        let export = instance.get_export(store, &name);
 
         match export {
             Some(Extern::Memory(_mem)) => {

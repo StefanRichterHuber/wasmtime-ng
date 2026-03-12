@@ -2,6 +2,8 @@ use jni::{bind_java_type, sys::jlong};
 use log::debug;
 use wasmtime::Engine;
 
+use crate::wasminstance::handle_wasmtime_error;
+
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct EngineHandle(*const Engine);
@@ -77,9 +79,16 @@ impl JWasmtimeEngineNativeInterface for JWasmtimeEngineAPI {
         config.wasm_bulk_memory(true);
         config.shared_memory(true);
 
-        let engine = Engine::new(&config).unwrap();
-        let result = EngineHandle::new(engine);
-        return Ok(result.into());
+        match Engine::new(&config) {
+            Ok(engine) => {
+                let result = EngineHandle::new(engine);
+                Ok(result.into())
+            }
+            Err(e) => {
+                handle_wasmtime_error(_env, e)?;
+                Err(jni::errors::Error::JavaException)
+            }
+        }
     }
 
     fn init_logging<'local>(

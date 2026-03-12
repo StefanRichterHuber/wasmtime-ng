@@ -1,8 +1,8 @@
-use crate::wasminstance::JWasmtimeInstance;
 use crate::wasmtimefunction::JWasmtimeFunction;
+use crate::{wasminstance::JWasmtimeInstance, wasmstore::StoreContent};
 use jni::{bind_java_type, sys::jlong};
 use log::debug;
-use wasmtime::{Func, Val};
+use wasmtime::{AsContext, Func, Val};
 
 use crate::{
     wasminstance::{
@@ -77,18 +77,17 @@ impl JWasmtimeFuncRefNativeInterface for JWasmtimeFuncRefAPI {
         _context: ::jni::objects::JMap<'local>,
         args: ::jni::objects::JObjectArray<'local, ::jni::objects::JObject<'local>>,
     ) -> ::std::result::Result<::jni::objects::JObjectArray<'local>, Self::Error> {
-        let s = unsafe { store.as_ref() };
         let func = unsafe { func.as_ref() };
-        let param_types: Vec<wasmtime::ValType> = func.ty(&mut *s).params().collect();
-        let result_types: Vec<wasmtime::ValType> = func.ty(&mut *s).results().collect();
+        let param_types: Vec<wasmtime::ValType> = func.ty(store).params().collect();
+        let result_types: Vec<wasmtime::ValType> = func.ty(store).results().collect();
         let args = convert_java_array_to_val_vector(env, store, args, &param_types)?;
         let result_len = result_types.len();
         let mut results = vec![Val::I64(0); result_len];
 
-        let result = match func.call(unsafe { store.as_ref() }, &args, &mut results) {
+        let result = match func.call(store, &args, &mut results) {
             Ok(()) => {
                 debug!("Successfully called wrapped function");
-                convert_val_vector_to_java_array(env, store, &results)?
+                convert_val_vector_to_java_array(env, &store, &results)?
             }
             Err(e) => {
                 handle_wasmtime_error(env, e)?;
@@ -101,15 +100,21 @@ impl JWasmtimeFuncRefNativeInterface for JWasmtimeFuncRefAPI {
 }
 
 impl<'local> JWasmtimeFuncRef<'local> {
-    pub fn from_func(
+    pub fn from_func<T>(
         env: &mut ::jni::Env<'local>,
-        store: StoreHandle,
+        store: &T,
         func: Func,
-    ) -> Result<JWasmtimeFuncRef<'local>, jni::errors::Error> {
+    ) -> Result<Self, jni::errors::Error>
+    where
+        T: AsContext<Data = StoreContent>,
+    {
         debug!("Converting wasm type 'FuncRef' to java type 'WasmtimeFuncRef'");
         let handle = FuncHandle::new(func);
 
-        let func_object = JWasmtimeFuncRef::new(env, handle, store)?;
-        Ok(func_object)
+        let context = store.as_context();
+        let data = context.data();
+        let w: StoreHandle = data.store_content_ptr.unwrap().into();
+
+        JWasmtimeFuncRef::new(env, handle, w)
     }
 }
