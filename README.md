@@ -190,7 +190,6 @@ try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix())) {
 * **Networking**:
     * `withSocket(java.net.Socket)`: Pre-opens a client socket.
     * `withServerSocket(java.net.ServerSocket)`: Pre-opens a listening socket.
-    * `withSocketFactory(WasiSocketFactory)`: Customizable socket creation (e.g., proxies, virtual networks).
 
 ### WASI threads
 

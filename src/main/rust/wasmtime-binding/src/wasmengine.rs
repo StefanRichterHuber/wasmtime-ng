@@ -1,4 +1,4 @@
-use jni::{bind_java_type, sys::jlong};
+use jni::{bind_java_type, objects::JPrimitiveArray, sys::jlong};
 use log::debug;
 use wasmtime::Engine;
 
@@ -52,6 +52,7 @@ bind_java_type! {
     native_methods {
         extern fn close_engine(handle: EngineHandle),
         extern fn create_engine() -> jlong,
+        extern fn precompile(handle: EngineHandle,src: JByteBuffer ) -> jbyte[],
         extern static fn init_logging(level: jint)
     },
 }
@@ -75,6 +76,7 @@ impl JWasmtimeEngineNativeInterface for JWasmtimeEngineAPI {
     ) -> ::std::result::Result<::jni::sys::jlong, Self::Error> {
         debug!("Engine created");
         let mut config = wasmtime::Config::new();
+        config.strategy(wasmtime::Strategy::Cranelift);
         config.wasm_threads(true);
         config.wasm_bulk_memory(true);
         config.shared_memory(true);
@@ -97,5 +99,35 @@ impl JWasmtimeEngineNativeInterface for JWasmtimeEngineAPI {
         level: ::jni::sys::jint,
     ) -> ::std::result::Result<(), Self::Error> {
         crate::logging::init_logging(env, level)
+    }
+
+    fn precompile<'local>(
+        env: &mut ::jni::Env<'local>,
+        _this: JWasmtimeEngine<'local>,
+        handle: EngineHandle,
+        src: ::jni::objects::JByteBuffer<'local>,
+    ) -> ::std::result::Result<
+        ::jni::objects::JPrimitiveArray<'local, ::jni::sys::jbyte>,
+        Self::Error,
+    > {
+        let engine = unsafe { handle.as_ref() };
+        // Read directly the direct byte buffer
+        let address = env.get_direct_buffer_address(&src)?;
+        let size = env.get_direct_buffer_capacity(&src)?;
+        let script: &[u8] = unsafe { core::slice::from_raw_parts(address, size) };
+        match engine.precompile_module(script) {
+            Ok(result) => {
+                let result_array = env.new_byte_array(result.len())?;
+                let result: &[i8] = unsafe {
+                    std::slice::from_raw_parts(result.as_ptr() as *const i8, result.len())
+                };
+                result_array.set_region(env, 0, &result)?;
+                Ok(result_array)
+            }
+            Err(e) => {
+                handle_wasmtime_error(env, e)?;
+                Ok(JPrimitiveArray::null())
+            }
+        }
     }
 }

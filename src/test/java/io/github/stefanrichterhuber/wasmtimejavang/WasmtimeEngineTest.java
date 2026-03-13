@@ -177,4 +177,36 @@ public class WasmtimeEngineTest {
 
         }
     }
+
+    @Test
+    public void testPrecompile() throws Exception {
+        byte[] precompiled = null;
+        // One can precompile the code with one engine, store it somewhere and use it
+        // with another engine
+        try (
+                WasmtimeEngine engine = new WasmtimeEngine();) {
+            precompiled = engine.precompile(wat);
+        }
+
+        try (
+                WasmtimeEngine engine = new WasmtimeEngine();
+                WasmtimeModule module = WasmtimeModule.fromPrecompiled(engine, precompiled);
+                WasmtimeStore store = new WasmtimeStore(engine);
+                WasmtimeLinker linker = new WasmtimeLinker(engine, store);
+
+        ) {
+            store.getContext().put("greeting", "Hello world");
+            linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
+                LOGGER.info("Function env::hello called with greeting: " + context.get("greeting"));
+                return new Object[] {};
+            });
+
+            try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
+                Object[] result = instance.invoke("run");
+                assertNotNull(result);
+            }
+
+        }
+
+    }
 }

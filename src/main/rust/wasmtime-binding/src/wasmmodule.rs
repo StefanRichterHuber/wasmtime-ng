@@ -54,6 +54,7 @@ bind_java_type! {
 
     native_methods {
         extern fn create_module(engine: EngineHandle, src: JByteBuffer ) -> jlong,
+        extern fn create_module_from_precompiled(engine: EngineHandle, src: JByteBuffer ) -> jlong,
         extern fn close_module(module: ModuleHandle)
     }
 }
@@ -91,6 +92,28 @@ impl JWasmtimeModuleNativeInterface for JWasmtimeModuleAPI {
         };
 
         debug!("Created module from source buffer");
+        Ok(module)
+    }
+
+    fn create_module_from_precompiled<'local>(
+        env: &mut ::jni::Env<'local>,
+        _this: JWasmtimeModule<'local>,
+        engine: EngineHandle,
+        src: ::jni::objects::JByteBuffer<'local>,
+    ) -> ::std::result::Result<::jni::sys::jlong, Self::Error> {
+        let address = env.get_direct_buffer_address(&src)?;
+        let size = env.get_direct_buffer_capacity(&src)?;
+
+        let bytes: &[u8] = unsafe { core::slice::from_raw_parts(address, size) };
+
+        let module = match unsafe { Module::deserialize(engine.as_ref(), bytes) } {
+            Ok(module) => ModuleHandle::new(module).into(),
+            Err(error) => {
+                handle_wasmtime_error(env, error)?;
+                0
+            }
+        };
+        debug!("Created module from precompiled wasm code");
         Ok(module)
     }
 }

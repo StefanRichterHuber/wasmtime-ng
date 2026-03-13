@@ -29,6 +29,33 @@ public final class WasmtimeModule implements AutoCloseable {
 
     private native void closeModule(long modulePtr);
 
+    private native long createModuleFromPrecompiled(long enginePtr, ByteBuffer source);
+
+    /**
+     * Compiles a WebAssembly module from a binary buffer.
+     * 
+     * @param engine      Engine to use for compilation.
+     * @param precompiled Is this raw wat / wasm or already precompiled code?
+     * @param source      ByteBuffer containing the WASM binary. If the ByteBuffer
+     *                    is
+     *                    direct, it can be passed to the native context without
+     *                    copying.
+     */
+    private WasmtimeModule(WasmtimeEngine engine, boolean precompiled, ByteBuffer source) {
+        if (engine == null) {
+            throw new NullPointerException("WasmtimeEngine must not be null");
+        }
+        if (source == null) {
+            throw new NullPointerException("Source ByteBuffer must not be null");
+        }
+        this.engine = engine;
+        if (precompiled) {
+            this.modulePtr = createModuleFromPrecompiled(getEngine().getEnginePtr(), createByteBuffer(source));
+        } else {
+            this.modulePtr = createModule(engine.getEnginePtr(), createByteBuffer(source));
+        }
+    }
+
     /**
      * Compiles a WebAssembly module from a binary buffer.
      * 
@@ -37,23 +64,7 @@ public final class WasmtimeModule implements AutoCloseable {
      *               direct, it can be passed to the native context without copying.
      */
     public WasmtimeModule(WasmtimeEngine engine, ByteBuffer source) {
-        if (engine == null) {
-            throw new NullPointerException("WasmtimeEngine must not be null");
-        }
-        if (source == null) {
-            throw new NullPointerException("Source ByteBuffer must not be null");
-        }
-        if (!source.isDirect()) {
-            LOGGER.info(
-                    "Only direct ByteBuffers could be directly move to the runtime, all others have to be copied in to a direct ByteBuffer");
-
-            final ByteBuffer direcByteBuffer = ByteBuffer.allocateDirect(source.capacity());
-            direcByteBuffer.put(source);
-            direcByteBuffer.flip();
-            source = direcByteBuffer;
-        }
-        this.engine = engine;
-        this.modulePtr = createModule(engine.getEnginePtr(), source);
+        this(engine, false, source);
     }
 
     /**
@@ -88,17 +99,68 @@ public final class WasmtimeModule implements AutoCloseable {
     }
 
     /**
+     * Creates a WasmtimeModule from a precompiled code (.cwasm)
+     * 
+     * @param src    Source
+     * @param engine Wasmtimeengine to use
+     * @return A WasmtimeModule
+     */
+    public static WasmtimeModule fromPrecompiled(WasmtimeEngine engine, ByteBuffer src) {
+        return new WasmtimeModule(engine, true, createByteBuffer(src));
+    }
+
+    /**
+     * Creates a WasmtimeModule from a precompiled code (.cwasm)
+     * 
+     * @param src    Source
+     * @param engine Wasmtimeengine to use
+     * @return A WasmtimeModule
+     * @throws IOException
+     */
+    public static WasmtimeModule fromPrecompiled(WasmtimeEngine engine, InputStream src) throws IOException {
+        return new WasmtimeModule(engine, true, createByteBuffer(src));
+    }
+
+    /**
+     * Creates a WasmtimeModule from a precompiled code (.cwasm)
+     * 
+     * @param src    Source
+     * @param engine Wasmtimeengine to use
+     * @return A WasmtimeModule
+     */
+    public static WasmtimeModule fromPrecompiled(WasmtimeEngine engine, byte[] src) {
+        return new WasmtimeModule(engine, true, createByteBuffer(src));
+    }
+
+    /**
+     * Utility function to ensure that a given ByteBuffer is direct, otherwise it is
+     * copied into a direct ByteBuffer.
+     * 
+     * @param source The source ByteBuffer.
+     * @return Created ByteBuffer.
+     */
+    static ByteBuffer createByteBuffer(ByteBuffer source) {
+        if (!source.isDirect()) {
+            LOGGER.info(
+                    "Only direct ByteBuffers could be directly move to the runtime, all others have to be copied in to a direct ByteBuffer");
+
+            final ByteBuffer directByteBuffer = ByteBuffer.allocateDirect(source.capacity());
+            directByteBuffer.put(source);
+            directByteBuffer.flip();
+            return directByteBuffer;
+        }
+        return source;
+    }
+
+    /**
      * Utility function to copy a string into a direct ByteBuffer.
      * 
      * @param src String to copy.
      * @return Created ByteBuffer.
      */
-    private static ByteBuffer createByteBuffer(String src) {
+    static ByteBuffer createByteBuffer(String src) {
         byte[] srcBytes = src.getBytes(StandardCharsets.UTF_8);
-        ByteBuffer buf = ByteBuffer.allocateDirect(srcBytes.length);
-        buf.put(srcBytes);
-        buf.flip();
-        return buf;
+        return createByteBuffer(srcBytes);
     }
 
     /**
@@ -107,7 +169,7 @@ public final class WasmtimeModule implements AutoCloseable {
      * @param src byte array to copy
      * @return Created ByteBuffer.
      */
-    private static ByteBuffer createByteBuffer(byte[] src) {
+    static ByteBuffer createByteBuffer(byte[] src) {
         ByteBuffer buf = ByteBuffer.allocateDirect(src.length);
         buf.put(src);
         buf.flip();
@@ -121,7 +183,7 @@ public final class WasmtimeModule implements AutoCloseable {
      * @return A direct ByteBuffer containing the data from the stream.
      * @throws IOException If reading from the stream fails.
      */
-    private static ByteBuffer createByteBuffer(InputStream src) throws IOException {
+    static ByteBuffer createByteBuffer(InputStream src) throws IOException {
         if (src == null) {
             throw new NullPointerException("src must not be null");
         }
