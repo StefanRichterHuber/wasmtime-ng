@@ -2,6 +2,7 @@ package io.github.stefanrichterhuber.wasmtimejavang;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Objects;
 
 /**
  * Represents a shared WebAssembly linear memory.
@@ -32,7 +33,7 @@ public final class WasmtimeSharedMemory implements AutoCloseable, WasmtimeMemory
      * @param maxPages     Maximum number of pages.
      */
     public WasmtimeSharedMemory(WasmtimeEngine engine, long initialPages, long maxPages) {
-        this.engine = engine;
+        this.engine = Objects.requireNonNull(engine, "engine must not be null");
         this.sharedMemoryPtr = createSharedMemory(engine.getEnginePtr(), initialPages, maxPages);
 
     }
@@ -43,6 +44,9 @@ public final class WasmtimeSharedMemory implements AutoCloseable, WasmtimeMemory
      * @return The native shared memory pointer.
      */
     long getSharedMemoryPtr() {
+        if (sharedMemoryPtr == 0) {
+            throw new IllegalStateException("Shared memory no longer active");
+        }
         return this.sharedMemoryPtr;
     }
 
@@ -53,9 +57,9 @@ public final class WasmtimeSharedMemory implements AutoCloseable, WasmtimeMemory
      */
     @Override
     public ByteBuffer buffer() {
-        final long currentSize = getMemorySize(sharedMemoryPtr);
+        final long currentSize = getMemorySize(getSharedMemoryPtr());
         if (buffer == null || buffer.capacity() != currentSize) {
-            buffer = getDirectBuffer(sharedMemoryPtr);
+            buffer = getDirectBuffer(getSharedMemoryPtr());
             buffer.order(ByteOrder.LITTLE_ENDIAN);
         }
         return buffer;
@@ -68,7 +72,7 @@ public final class WasmtimeSharedMemory implements AutoCloseable, WasmtimeMemory
      */
     @Override
     public void grow(long delta) {
-        growMemory(sharedMemoryPtr, delta);
+        growMemory(getSharedMemoryPtr(), delta);
         // Invalidate buffer to force refresh on next access
         this.buffer = null;
     }

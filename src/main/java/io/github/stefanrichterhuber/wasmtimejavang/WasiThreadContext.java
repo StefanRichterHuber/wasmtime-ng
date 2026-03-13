@@ -3,6 +3,8 @@ package io.github.stefanrichterhuber.wasmtimejavang;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.logging.log4j.LogManager;
@@ -11,10 +13,9 @@ import org.apache.logging.log4j.Logger;
 /**
  * Implementation of wasi-threads.
  * This class provides the thread_spawn function to the WASM module.
- * When called, it spawns a new native thread, creates a fresh instance of the
- * WASM module
- * (sharing the same memory), and calls the wasi_thread_start function in the
- * new instance.
+ * When called, uses an Executor to execute the thread, creates a fresh instance
+ * of the WASM module (sharing the same memory), and calls the wasi_thread_start
+ * function in the new instance.
  */
 public class WasiThreadContext implements WasmContext {
     /**
@@ -35,9 +36,24 @@ public class WasiThreadContext implements WasmContext {
     private final AtomicInteger nextTid = new AtomicInteger(1);
 
     /**
+     * Executor to run the new threads
+     */
+    private final Executor threadExecutor;
+
+    /**
      * Creates a new WasiThreadContext.
      */
     public WasiThreadContext() {
+        this(Executors.newThreadPerTaskExecutor(Thread::new));
+    }
+
+    /**
+     * Creates a new WasiThreadContext with a Executor to run new WasmThreads
+     * 
+     * @param exec Executor to use
+     */
+    public WasiThreadContext(Executor exec) {
+        threadExecutor = exec;
     }
 
     @Override
@@ -76,23 +92,19 @@ public class WasiThreadContext implements WasmContext {
             throw new IllegalStateException("To support wasm multithread, a shared memory must be provided!");
         }
 
-        final Thread thread = new Thread(() -> {
+        this.threadExecutor.execute(() -> {
             try (WasmtimeStore threadStore = instance.getStore().createClone();
-                    WasmtimeLinker threadLinker = instance.getLinker().createClone(threadStore)) {
-                try (WasmtimeInstance threadInstance = new WasmtimeInstance(threadStore,
-                        instance.getModule(),
-                        threadLinker)) {
-                    threadInstance.invoke(WASI_THREAD_START, tid, arg);
-                } catch (Exception e) {
-                    LOGGER.error("Error in wasi-thread start", e);
-                }
+                    WasmtimeLinker threadLinker = instance.getLinker().createClone(threadStore);
+                    WasmtimeInstance threadInstance = new WasmtimeInstance(threadStore, instance.getModule(),
+                            threadLinker)) {
+                threadInstance.invoke(WASI_THREAD_START, tid, arg);
             } catch (Exception e) {
-                LOGGER.error("Error setting up wasi-thread", e);
+                LOGGER.error("Error in wasi-thread start", e);
             }
         });
-        thread.start();
 
         return new Object[] { tid };
+
     }
 
     @Override

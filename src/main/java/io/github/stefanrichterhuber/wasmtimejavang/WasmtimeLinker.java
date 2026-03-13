@@ -2,6 +2,7 @@ package io.github.stefanrichterhuber.wasmtimejavang;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -54,6 +55,9 @@ public final class WasmtimeLinker implements AutoCloseable {
      * @return The native linker pointer.
      */
     long getLinkerPtr() {
+        if (linkerPtr == 0) {
+            throw new IllegalStateException("Linker no longer active");
+        }
         return this.linkerPtr;
     }
 
@@ -64,14 +68,8 @@ public final class WasmtimeLinker implements AutoCloseable {
      * @param store  The store associated with this linker.
      */
     public WasmtimeLinker(WasmtimeEngine engine, WasmtimeStore store) {
-        if (engine == null) {
-            throw new NullPointerException("WasmtimeEngine must not be null");
-        }
-        if (store == null) {
-            throw new NullPointerException("WasmtimeStore must not be null");
-        }
-        this.engine = engine;
-        this.store = store;
+        this.engine = Objects.requireNonNull(engine, "engine must not be null");
+        this.store = Objects.requireNonNull(store, "store must not be null");
         this.linkerPtr = createLinker(engine.getEnginePtr());
     }
 

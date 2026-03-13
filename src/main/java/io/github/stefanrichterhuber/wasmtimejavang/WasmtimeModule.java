@@ -8,6 +8,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -42,13 +43,8 @@ public final class WasmtimeModule implements AutoCloseable {
      *                    copying.
      */
     private WasmtimeModule(WasmtimeEngine engine, boolean precompiled, ByteBuffer source) {
-        if (engine == null) {
-            throw new NullPointerException("WasmtimeEngine must not be null");
-        }
-        if (source == null) {
-            throw new NullPointerException("Source ByteBuffer must not be null");
-        }
-        this.engine = engine;
+        this.engine = Objects.requireNonNull(engine, "engine must not be null");
+        Objects.requireNonNull(source, "source must not be null");
         if (precompiled) {
             this.modulePtr = createModuleFromPrecompiled(getEngine().getEnginePtr(), createByteBuffer(source));
         } else {
@@ -64,7 +60,7 @@ public final class WasmtimeModule implements AutoCloseable {
      *               direct, it can be passed to the native context without copying.
      */
     public WasmtimeModule(WasmtimeEngine engine, ByteBuffer source) {
-        this(engine, false, source);
+        this(engine, false, Objects.requireNonNull(source, "source must not be null"));
     }
 
     /**
@@ -74,7 +70,7 @@ public final class WasmtimeModule implements AutoCloseable {
      * @param source byte array containing the WASM binary.
      */
     public WasmtimeModule(WasmtimeEngine engine, byte[] source) {
-        this(engine, createByteBuffer(source));
+        this(engine, createByteBuffer(Objects.requireNonNull(source, "source must not be null")));
     }
 
     /**
@@ -85,7 +81,7 @@ public final class WasmtimeModule implements AutoCloseable {
      * @throws IOException If reading from the stream fails.
      */
     public WasmtimeModule(WasmtimeEngine engine, InputStream is) throws IOException {
-        this(engine, createByteBuffer(is));
+        this(engine, createByteBuffer(Objects.requireNonNull(is, "is must not be null")));
     }
 
     /**
@@ -95,7 +91,7 @@ public final class WasmtimeModule implements AutoCloseable {
      * @param wat    The WAT source string.
      */
     public WasmtimeModule(WasmtimeEngine engine, String wat) {
-        this(engine, createByteBuffer(wat));
+        this(engine, createByteBuffer(Objects.requireNonNull(wat, "wat must not be null")));
     }
 
     /**
@@ -229,6 +225,9 @@ public final class WasmtimeModule implements AutoCloseable {
      * @return The native module pointer.
      */
     long getModulePtr() {
+        if (modulePtr == 0) {
+            throw new IllegalStateException("Module no longer active");
+        }
         return this.modulePtr;
     }
 

@@ -1,5 +1,7 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import java.util.Objects;
+
 /**
  * Represents an instantiated WebAssembly module.
  * An instance contains the state of the WASM module and allows calling its
@@ -29,9 +31,9 @@ public final class WasmtimeInstance implements AutoCloseable {
      * @param linker The linker providing imports for the module.
      */
     public WasmtimeInstance(final WasmtimeStore store, final WasmtimeModule module, final WasmtimeLinker linker) {
-        this.store = store;
-        this.module = module;
-        this.linker = linker;
+        this.store = Objects.requireNonNull(store, "store must not be null");
+        this.module = Objects.requireNonNull(module, "module must not be null");
+        this.linker = Objects.requireNonNull(linker, "linker must not be null");
         this.instancePtr = createInstance(this.module.getModulePtr(), this.store.getStorePtr(),
                 this.linker.getLinkerPtr());
     }
@@ -53,6 +55,9 @@ public final class WasmtimeInstance implements AutoCloseable {
      * @return The native instance pointer.
      */
     long getInstancePtr() {
+        if (instancePtr == 0) {
+            throw new IllegalStateException("Instance no longer active");
+        }
         return this.instancePtr;
     }
 
@@ -64,7 +69,7 @@ public final class WasmtimeInstance implements AutoCloseable {
      * @return A list of result values from the function call.
      */
     public Object[] invoke(String name, Object... args) {
-        return runWasmFunc(this.store.getStorePtr(), this.instancePtr, name, args);
+        return runWasmFunc(this.store.getStorePtr(), getInstancePtr(), name, args);
     }
 
     /**
@@ -94,7 +99,7 @@ public final class WasmtimeInstance implements AutoCloseable {
      * @return A WasmtimeMemory object representing the exported memory.
      */
     public WasmtimeMemory getMemory(String name) {
-        return new WasmtimeLocalMemory(this, store, name);
+        return new WasmtimeLocalMemory(this, getStore(), name);
     }
 
     /**

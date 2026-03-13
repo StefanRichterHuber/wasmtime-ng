@@ -511,7 +511,7 @@ where
             }
         }
         wasmtime::ValType::Ref(ref_type) => {
-            if ref_type.matches(&RefType::EXTERNREF) {
+            if ref_type.matches(&RefType::EXTERNREF) || ref_type.matches(&RefType::NULLEXTERNREF) {
                 debug!("Creating EXTERNREF from any java object");
                 let global_item = env.new_global_ref(item)?;
                 let container = ExternRefContainer::new(global_item);
@@ -549,13 +549,38 @@ pub fn convert_java_array_to_val_vector<'local, T>(
 where
     T: AsContextMut<Data = StoreContent>,
 {
-    let array_len = values.len(env)?;
+    // It is ensured that we always deliver the correct number of wasm Vals,
+    // no matter if the given java array is null or too short.
+    // Missing values are replaced with java null
+    let mut result = Vec::with_capacity(param_types.len());
+    let values_len = if values.is_null() {
+        if param_types.len() > 0 {
+            warn!(
+                "Wasm function expects {} args, but given args are null. All args are considered as java null",
+                param_types.len()
+            );
+        }
+        0
+    } else {
+        let values_len = values.len(env)?;
+        if values_len < param_types.len() {
+            warn!(
+                "Wasm function expects {} args, but only {} args are given. Missing args are considered as java null",
+                param_types.len(),
+                values_len
+            );
+        }
+        values_len
+    };
 
-    let mut result = Vec::with_capacity(array_len);
-    for index in 0..array_len {
-        let item = values.get_element(env, index)?;
-        let val_type = param_types.get(index).unwrap();
-        let val = convert_java_object_to_val(env, &mut store, item, val_type)?;
+    for (index, val_type) in param_types.iter().enumerate() {
+        let value = if index < values_len {
+            values.get_element(env, index)?
+        } else {
+            debug!("Java value array to short / or null, generate wasm value from java null");
+            JObject::null()
+        };
+        let val = convert_java_object_to_val(env, &mut store, value, val_type)?;
         result.push(val);
     }
     Ok(result)

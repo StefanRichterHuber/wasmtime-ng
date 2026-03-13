@@ -1,6 +1,7 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.logging.log4j.LogManager;
@@ -45,6 +46,9 @@ public final class WasmtimeStore implements AutoCloseable {
      * @return The native store pointer.
      */
     long getStorePtr() {
+        if (storePtr == 0) {
+            throw new IllegalStateException("Store no longer active");
+        }
         return this.storePtr;
     }
 
@@ -56,11 +60,8 @@ public final class WasmtimeStore implements AutoCloseable {
      *                map must be thread-safe!
      */
     public WasmtimeStore(WasmtimeEngine engine, Map<String, Object> context) {
-        if (engine == null) {
-            throw new NullPointerException("WasmtimeEngine must not be null");
-        }
-        this.context = context;
-        this.engine = engine;
+        this.context = Objects.requireNonNull(context, "context must not be null");
+        this.engine = Objects.requireNonNull(engine, "engine must not be null");
         this.storePtr = createStore(engine.getEnginePtr(), this.context);
     }
 

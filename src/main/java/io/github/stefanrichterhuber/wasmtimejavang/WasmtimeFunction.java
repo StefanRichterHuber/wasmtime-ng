@@ -1,6 +1,8 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Functional interface for a Java implementation of a function imported into /
@@ -21,4 +23,33 @@ public interface WasmtimeFunction {
      *         returned as Objects (usally Numbers).
      */
     Object[] call(WasmtimeInstance instance, Map<String, Object> context, Object... args);
+
+    /**
+     * Returns a composed function that first applies this function to its input,
+     * and then applies the after function to the result. If evaluation of either
+     * function throws an exception, it is relayed to the caller of the composed
+     * function.
+     * 
+     * @param after Function to apply on the result of this function
+     * @return New WasmtimeFunction
+     */
+    default WasmtimeFunction andThen(Function<Object[], Object[]> after) {
+        Objects.requireNonNull(after);
+        return (i, c, a) -> after.apply(this.call(i, c, a));
+    }
+
+    /**
+     * Creates a Function from this WasmtimeFunction by binding the instance and
+     * the context from the instance
+     * <br>
+     * Warning: Ensure that the instance remains active for the whole lifetime of
+     * the function!
+     * 
+     * @param instance WasmtimeInstance to bind
+     * @return Function created
+     */
+    default Function<Object[], Object[]> bind(WasmtimeInstance instance) {
+        Objects.requireNonNull(instance);
+        return (args) -> this.call(instance, instance.getStore().getContext(), args);
+    }
 }

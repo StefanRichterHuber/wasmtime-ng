@@ -5,6 +5,7 @@ import io.questdb.jar.jni.JarJniLoader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -99,6 +100,9 @@ public final class WasmtimeEngine implements AutoCloseable {
      * @return The native engine pointer.
      */
     long getEnginePtr() {
+        if (enginePtr == 0) {
+            throw new IllegalStateException("Engine no longer active");
+        }
         return this.enginePtr;
     }
 
@@ -120,7 +124,7 @@ public final class WasmtimeEngine implements AutoCloseable {
      * @return cwasm file content
      */
     public byte[] precompile(String wat) {
-        return precompile(WasmtimeModule.createByteBuffer(wat));
+        return precompile(WasmtimeModule.createByteBuffer(Objects.requireNonNull(wat, "wat must not be null")));
     }
 
     /**
@@ -130,7 +134,7 @@ public final class WasmtimeEngine implements AutoCloseable {
      * @return cwasm file content
      */
     public byte[] precompile(byte[] source) {
-        return precompile(WasmtimeModule.createByteBuffer(source));
+        return precompile(WasmtimeModule.createByteBuffer(Objects.requireNonNull(source, "source must not be null")));
     }
 
     /**
@@ -140,7 +144,7 @@ public final class WasmtimeEngine implements AutoCloseable {
      * @return cwasm file content
      */
     public byte[] precompile(InputStream is) throws IOException {
-        return precompile(WasmtimeModule.createByteBuffer(is));
+        return precompile(WasmtimeModule.createByteBuffer(Objects.requireNonNull(is, "is must not be null")));
     }
 
     /**
@@ -150,6 +154,7 @@ public final class WasmtimeEngine implements AutoCloseable {
      * @return cwasm file content
      */
     public byte[] precompile(ByteBuffer source) {
-        return this.precompile(this.getEnginePtr(), WasmtimeModule.createByteBuffer(source));
+        return this.precompile(this.getEnginePtr(),
+                WasmtimeModule.createByteBuffer(Objects.requireNonNull(source, "source must not be null")));
     }
 }
