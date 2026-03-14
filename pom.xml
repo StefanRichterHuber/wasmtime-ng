@@ -5,7 +5,7 @@
 
     <groupId>io.github.stefanrichterhuber</groupId>
     <artifactId>wasmtimejavang</artifactId>
-    <version>3.0.1-SNAPSHOT</version>
+    <version>4.0.0</version>
 
     <name>wasmtime-java-ng</name>
     <description>Java wrapper for the QuickJS Javascript engine.</description>
@@ -49,7 +49,7 @@
         <connection>scm:git:https://github.com/StefanRichterHuber/wasmtime-ng</connection>
         <developerConnection>scm:git:https://github.com/StefanRichterHuber/wasmtime-ng</developerConnection>
         <url>https://github.com/StefanRichterHuber/wasmtime-ng</url>
-        <tag>v2.0.1</tag>
+        <tag>v4.0.0</tag>
     </scm>
 
     <distributionManagement>
