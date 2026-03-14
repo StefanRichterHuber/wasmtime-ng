@@ -77,8 +77,8 @@ try (
     store.getContext().put("greeting", "Hello world");
 
     // Define a Java function for the WASM module to call
-    linker.importFunction("env", "hello", List.of(), List.of(), (instance, context, params) -> {
-        System.out.println("Java side: " + context.get("greeting"));
+    linker.importFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
+        System.out.println("Java side: " + instance.getContext().get("greeting"));
         return new Object[] {};
     });
 
