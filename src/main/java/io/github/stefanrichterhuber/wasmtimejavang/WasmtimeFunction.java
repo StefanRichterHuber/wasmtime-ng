@@ -1,6 +1,5 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
-import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -11,18 +10,18 @@ import java.util.function.Function;
  */
 @FunctionalInterface
 public interface WasmtimeFunction {
+
     /**
      * Executes the Java function.
      * 
      * @param instance WasmtimeInstance of this call, necessary to access the memory
      *                 and call native functions
-     * @param context  The context map from the WasmtimeStore.
      * @param args     The arguments passed from WASM. All numeric types are passed
      *                 as Objects (usually Numbers).
      * @return An array of results to return to WASM. All numeric types must be
      *         returned as Objects (usally Numbers).
      */
-    Object[] call(WasmtimeInstance instance, Map<String, Object> context, Object... args);
+    Object[] call(WasmtimeInstance instance, Object... args);
 
     /**
      * Returns a composed function that first applies this function to its input,
@@ -35,12 +34,11 @@ public interface WasmtimeFunction {
      */
     default WasmtimeFunction andThen(Function<Object[], Object[]> after) {
         Objects.requireNonNull(after);
-        return (i, c, a) -> after.apply(this.call(i, c, a));
+        return (i, a) -> after.apply(this.call(i, a));
     }
 
     /**
-     * Creates a Function from this WasmtimeFunction by binding the instance and
-     * the context from the instance
+     * Creates a Function from this WasmtimeFunction by binding the instance
      * <br>
      * Warning: Ensure that the instance remains active for the whole lifetime of
      * the function!
@@ -50,6 +48,6 @@ public interface WasmtimeFunction {
      */
     default Function<Object[], Object[]> bind(WasmtimeInstance instance) {
         Objects.requireNonNull(instance);
-        return (args) -> this.call(instance, instance.getStore().getContext(), args);
+        return (args) -> this.call(instance, args);
     }
 }

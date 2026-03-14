@@ -1,7 +1,5 @@
 package io.github.stefanrichterhuber.wasmtimejavang.internal;
 
-import java.util.Map;
-
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeFunction;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeInstance;
 
@@ -10,7 +8,6 @@ final class WasmtimeFuncRef implements WasmtimeFunction {
     private final long storePtr;
 
     private native Object[] invokeNativeFunc(long funcPtr, long storePtr, WasmtimeInstance instance,
-            Map<String, Object> context,
             Object[] args);
 
     /**
@@ -26,8 +23,8 @@ final class WasmtimeFuncRef implements WasmtimeFunction {
     }
 
     @Override
-    public Object[] call(WasmtimeInstance instance, Map<String, Object> context, Object... args) {
-        return invokeNativeFunc(funcPtr, storePtr, instance, context, args);
+    public Object[] call(WasmtimeInstance instance, Object... args) {
+        return invokeNativeFunc(funcPtr, storePtr, instance, args);
     }
 
 }

@@ -53,7 +53,7 @@ bind_java_type! {
     },
 
     methods = {
-        fn call(instance: JWasmtimeInstance, context: JMap, args: JObject[]) -> JObject[],
+        fn call(instance: JWasmtimeInstance, args: JObject[]) -> JObject[],
     },
 
     is_instance_of = {
@@ -62,7 +62,7 @@ bind_java_type! {
     },
 
     native_methods {
-        extern fn invoke_native_func(func: FuncHandle, store: StoreHandle, instance: JWasmtimeInstance, context: JMap, args: JObject[] ) -> JObject[]
+        extern fn invoke_native_func(func: FuncHandle, store: StoreHandle, instance: JWasmtimeInstance, args: JObject[] ) -> JObject[]
     }
 }
 
@@ -75,7 +75,6 @@ impl JWasmtimeFuncRefNativeInterface for JWasmtimeFuncRefAPI {
         func: FuncHandle,
         store: StoreHandle,
         instance: JWasmtimeInstance<'local>,
-        _context: ::jni::objects::JMap<'local>,
         args: ::jni::objects::JObjectArray<'local, ::jni::objects::JObject<'local>>,
     ) -> ::std::result::Result<::jni::objects::JObjectArray<'local>, Self::Error> {
         let instance = env.new_global_ref(instance)?;
