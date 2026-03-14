@@ -10,6 +10,6 @@ bind_java_type! {
     },
 
     methods = {
-        fn call(instance: JWasmtimeInstance, context: JMap, args: JObject[]) -> JObject[],
+        fn call(instance: JWasmtimeInstance, args: JObject[]) -> JObject[],
     }
 }

@@ -155,12 +155,9 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
             let result: std::result::Result<Vec<wasmtime::Val>, jni::errors::Error> = jvm
                 .attach_current_thread(|env| {
                     with_instance(env, None, |env, instance_obj| {
-                        // We need to the the instance object from the store map
-                        let java_map = &caller.data().context;
-
                         // Convert the args to a JObjectArray
                         let args_array = convert_val_vector_to_java_array(env, &caller, args)?;
-                        let result_array = func.call(env, instance_obj, java_map, args_array)?;
+                        let result_array = func.call(env, instance_obj, args_array)?;
                         env.exception_catch()?;
                         let result = convert_java_array_to_val_vector(
                             env,

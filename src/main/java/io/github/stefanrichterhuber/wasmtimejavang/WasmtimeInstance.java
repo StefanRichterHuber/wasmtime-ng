@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -109,6 +110,15 @@ public final class WasmtimeInstance implements AutoCloseable {
      */
     public WasmtimeStore getStore() {
         return this.store;
+    }
+
+    /**
+     * Returns the shared context object
+     * 
+     * @return Map with the context
+     */
+    public Map<String, Object> getContext() {
+        return this.getStore().getContext();
     }
 
     /**

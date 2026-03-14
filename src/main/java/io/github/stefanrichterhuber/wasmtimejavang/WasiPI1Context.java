@@ -600,7 +600,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pollOneoff(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pollOneoff(WasmtimeInstance instance, Object[] args) {
         final int in_ptr = (int) args[0];
         final int out_ptr = (int) args[1];
         final int nsubscriptions = (int) args[2];
@@ -635,7 +635,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] clockTimeGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] clockTimeGet(WasmtimeInstance instance, Object[] args) {
         final int clock_id = (int) args[0];
         final int time_ptr = (int) args[2];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
@@ -661,7 +661,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] clockResGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] clockResGet(WasmtimeInstance instance, Object[] args) {
         final int time_ptr = (int) args[1];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
         if (memory != null) {
@@ -680,7 +680,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdWrite(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdWrite(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int iovs_ptr = (int) args[1];
         final int iovs_len = (int) args[2];
@@ -703,7 +703,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdRead(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdRead(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int iovs_ptr = (int) args[1];
         final int iovs_len = (int) args[2];
@@ -726,7 +726,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] argsGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] argsGet(WasmtimeInstance instance, Object[] args) {
         final int argv_ptr = (int) args[0];
         final int argv_buf_ptr = (int) args[1];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
@@ -755,7 +755,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] argsSizesGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] argsSizesGet(WasmtimeInstance instance, Object[] args) {
         final int count_ptr = (int) args[0];
         final int buf_size_ptr = (int) args[1];
         WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
@@ -781,7 +781,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] environGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] environGet(WasmtimeInstance instance, Object[] args) {
         final int environ_ptr = (int) args[0];
         final int environ_buf_ptr = (int) args[1];
         WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
@@ -812,7 +812,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] environSizesGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] environSizesGet(WasmtimeInstance instance, Object[] args) {
         final int count_ptr = (int) args[0];
         final int buf_size_ptr = (int) args[1];
         WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
@@ -838,7 +838,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] randomGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] randomGet(WasmtimeInstance instance, Object[] args) {
         final int buf_ptr = (int) args[0];
         final int buf_len = (int) args[1];
         WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
@@ -858,7 +858,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] procExit(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] procExit(WasmtimeInstance instance, Object[] args) {
         throw new ProcExitException((int) args[0]);
     }
 
@@ -870,7 +870,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdAdvise(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdAdvise(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final long offset = (long) args[1];
         final long len = (long) args[2];
@@ -889,7 +889,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdAllocate(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdAllocate(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final long offset = (long) args[1];
         final long len = (long) args[2];
@@ -907,7 +907,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdClose(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdClose(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final WasiFileDescriptor wfd = fds.remove(fd);
         if (wfd == null)
@@ -928,7 +928,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdDatasync(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdDatasync(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final WasiFileDescriptor wfd = fds.get(fd);
         if (wfd == null)
@@ -944,7 +944,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdFdstatGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdFdstatGet(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int ptr = (int) args[1];
         final WasiFileDescriptor wfd = fds.get(fd);
@@ -962,7 +962,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdFdstatSetFlags(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdFdstatSetFlags(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int flags = (int) args[1];
         WasiFileDescriptor wfd = fds.get(fd);
@@ -979,7 +979,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdFdstatSetRights(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdFdstatSetRights(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final long rights_base = (long) args[1];
         final long rights_inheriting = (long) args[2];
@@ -997,7 +997,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdFilestatGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdFilestatGet(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int ptr = (int) args[1];
         final WasiFileDescriptor wfd = fds.get(fd);
@@ -1015,7 +1015,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdFilestatSetSize(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdFilestatSetSize(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final long size = (long) args[1];
         final WasiFileDescriptor wfd = fds.get(fd);
@@ -1032,7 +1032,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdFilestatSetTimes(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdFilestatSetTimes(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final long atim = (long) args[1];
         final long mtim = (long) args[2];
@@ -1051,7 +1051,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdPread(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdPread(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int iovs_ptr = (int) args[1];
         final int iovs_len = (int) args[2];
@@ -1072,7 +1072,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdPrestatDirName(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdPrestatDirName(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int path_ptr = (int) args[1];
         final int path_len = (int) args[2];
@@ -1110,7 +1110,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdPrestatGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdPrestatGet(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int ptr = (int) args[1];
         final WasiFileDescriptor wfd = fds.get(fd);
@@ -1147,7 +1147,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdPwrite(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdPwrite(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int iovs_ptr = (int) args[1];
         final int iovs_len = (int) args[2];
@@ -1168,7 +1168,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdReaddir(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdReaddir(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int buf_ptr = (int) args[1];
         final int buf_len = (int) args[2];
@@ -1189,7 +1189,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdRenumber(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdRenumber(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int to = (int) args[1];
         final WasiFileDescriptor wfd = fds.get(fd);
@@ -1215,7 +1215,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdSeek(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdSeek(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final long offset = (long) args[1];
         final int whence = (int) args[2];
@@ -1235,7 +1235,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdSync(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdSync(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         WasiFileDescriptor wfd = fds.get(fd);
         if (wfd == null)
@@ -1251,7 +1251,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] fdTell(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] fdTell(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int newoffset_ptr = (int) args[1];
         final WasiFileDescriptor wfd = fds.get(fd);
@@ -1269,7 +1269,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pathCreateDirectory(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pathCreateDirectory(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int path_ptr = (int) args[1];
         final int path_len = (int) args[2];
@@ -1294,7 +1294,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pathFilestatGet(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pathFilestatGet(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int flags = (int) args[1];
         final int path_ptr = (int) args[2];
@@ -1324,7 +1324,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pathFilestatSetTimes(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pathFilestatSetTimes(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         @SuppressWarnings("unused")
         final int flags = (int) args[1];
@@ -1349,7 +1349,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pathLink(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pathLink(WasmtimeInstance instance, Object[] args) {
         final int old_fd = (int) args[0];
         @SuppressWarnings("unused")
         final int old_flags = (int) args[1];
@@ -1383,7 +1383,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pathOpen(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pathOpen(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         @SuppressWarnings("unused")
         final int dirflags = (int) args[1];
@@ -1453,7 +1453,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pathReadlink(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pathReadlink(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int path_ptr = (int) args[1];
         final int path_len = (int) args[2];
@@ -1485,7 +1485,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pathRemoveDirectory(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pathRemoveDirectory(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int path_ptr = (int) args[1];
         final int path_len = (int) args[2];
@@ -1512,7 +1512,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pathRename(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pathRename(WasmtimeInstance instance, Object[] args) {
         final int old_fd = (int) args[0];
         final int old_path_ptr = (int) args[1];
         final int old_path_len = (int) args[2];
@@ -1544,7 +1544,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pathSymlink(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pathSymlink(WasmtimeInstance instance, Object[] args) {
         final int old_path_ptr = (int) args[0];
         final int old_path_len = (int) args[1];
         final int fd = (int) args[2];
@@ -1575,7 +1575,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] pathUnlinkFile(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] pathUnlinkFile(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int path_ptr = (int) args[1];
         final int path_len = (int) args[2];
@@ -1602,7 +1602,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] schedYield(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] schedYield(WasmtimeInstance instance, Object[] args) {
         Thread.yield();
         return new Object[] { WasiErrno.SUCCESS };
     }
@@ -1615,7 +1615,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] procRaise(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] procRaise(WasmtimeInstance instance, Object[] args) {
         return new Object[] { WasiErrno.NOSYS };
     }
 
@@ -1627,7 +1627,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] sockRecv(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] sockRecv(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int ri_data_ptr = (int) args[1];
         final int ri_data_len = (int) args[2];
@@ -1652,7 +1652,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] sockSend(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] sockSend(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int si_data_ptr = (int) args[1];
         final int si_data_len = (int) args[2];
@@ -1675,7 +1675,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] sockShutdown(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] sockShutdown(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         final int how = (int) args[1];
         final WasiFileDescriptor wfd = fds.get(fd);
@@ -1692,7 +1692,7 @@ public class WasiPI1Context implements WasmContext {
      * @param args     The function arguments.
      * @return An array of return values.
      */
-    protected Object[] sockAccept(WasmtimeInstance instance, Map<String, Object> context, Object[] args) {
+    protected Object[] sockAccept(WasmtimeInstance instance, Object[] args) {
         final int fd = (int) args[0];
         @SuppressWarnings("unused")
         final int flags = (int) args[1];
