@@ -79,7 +79,6 @@ public class WasiThreadContext implements WasmContext {
      * thread with this instance.
      * 
      * @param instance Instance requesting the thread
-     * @param context  Context Map (shared with the new instance)
      * @param args     Call args (contains the single argument for new thread)
      * @return Thread id
      */

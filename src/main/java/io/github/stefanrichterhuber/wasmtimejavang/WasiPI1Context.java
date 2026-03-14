@@ -596,7 +596,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI poll_oneoff.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -631,7 +631,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI clock_time_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -657,7 +657,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI clock_res_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -676,7 +676,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_write.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -699,7 +699,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_read.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -722,7 +722,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI args_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -751,7 +751,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI args_sizes_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -777,7 +777,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI environ_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -808,7 +808,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI environ_sizes_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -834,7 +834,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI random_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -854,7 +854,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI proc_exit.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -866,7 +866,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_advise.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -885,7 +885,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_allocate.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -903,7 +903,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_close.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -924,7 +924,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_datasync.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -940,7 +940,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_fdstat_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -958,7 +958,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_fdstat_set_flags.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -975,7 +975,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_fdstat_set_rights.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -993,7 +993,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_filestat_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1011,7 +1011,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_filestat_set_size.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1028,7 +1028,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_filestat_set_times.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1047,7 +1047,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_pread.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1068,7 +1068,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_prestat_dir_name.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1106,7 +1106,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_prestat_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1143,7 +1143,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_pwrite.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1164,7 +1164,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_readdir.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1185,7 +1185,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_renumber.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1211,7 +1211,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_seek.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1231,7 +1231,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_sync.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1247,7 +1247,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI fd_tell.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1265,7 +1265,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI path_create_directory.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1290,7 +1290,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI path_filestat_get.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1320,7 +1320,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI path_filestat_set_times.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1345,7 +1345,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI path_link.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1379,7 +1379,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI path_open.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1449,7 +1449,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI path_readlink.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1481,7 +1481,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI path_remove_directory.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1508,7 +1508,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI path_rename.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1540,7 +1540,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI path_symlink.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1571,7 +1571,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI path_unlink_file.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1598,7 +1598,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI sched_yield.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1611,7 +1611,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI proc_raise.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1623,7 +1623,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI sock_recv.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1648,7 +1648,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI sock_send.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1671,7 +1671,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI sock_shutdown.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
@@ -1688,7 +1688,7 @@ public class WasiPI1Context implements WasmContext {
      * Implementation of WASI sock_accept.
      * 
      * @param instance The WasmtimeInstance calling the function.
-     * @param context  The context map.
+     * 
      * @param args     The function arguments.
      * @return An array of return values.
      */
