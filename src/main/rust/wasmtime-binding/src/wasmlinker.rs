@@ -1,6 +1,6 @@
+use crate::wasmexception::{convert_jvm_error_to_wasmtime_error, handle_wasmtime_error};
 use crate::wasminstance::{
-    convert_java_array_to_val_vector, convert_val_vector_to_java_array, handle_wasmtime_error,
-    with_instance,
+    convert_java_array_to_val_vector, convert_val_vector_to_java_array, with_instance,
 };
 use crate::wasmsharedmemory::SharedMemoryHandle;
 use crate::wasmstore::StoreHandle;
@@ -158,14 +158,13 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                         // Convert the args to a JObjectArray
                         let args_array = convert_val_vector_to_java_array(env, &caller, args)?;
                         let result_array = func.call(env, instance_obj, args_array)?;
-                        env.exception_catch()?;
+
                         let result = convert_java_array_to_val_vector(
                             env,
                             &mut caller,
                             result_array,
                             &results,
                         )?;
-
                         debug!("Dynamic call was successfull: {:?}", result);
 
                         Ok(result)
@@ -215,22 +214,4 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
             Err(e) => handle_wasmtime_error(env, e),
         }
     }
-}
-
-///
-/// Converts jni::errors::Error to wasmtime::error:Error
-///
-pub fn convert_jvm_error_to_wasmtime_error(
-    jvm_error: jni::errors::Error,
-) -> wasmtime::error::Error {
-    let mut result = wasmtime::error::Error::msg(jvm_error.to_string());
-
-    match jvm_error {
-        jni::errors::Error::CaughtJavaException { stack, .. } => {
-            result = result.context(stack);
-        }
-        _ => {}
-    }
-
-    result
 }

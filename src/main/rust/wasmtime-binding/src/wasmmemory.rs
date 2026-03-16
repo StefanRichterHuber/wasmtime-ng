@@ -1,4 +1,5 @@
-use crate::wasminstance::{InstanceHandle, JWasmtimeInstance, handle_wasmtime_error};
+use crate::wasmexception::handle_wasmtime_error;
+use crate::wasminstance::{InstanceHandle, JWasmtimeInstance};
 use crate::wasmstore::{JWasmtimeStore, StoreHandle};
 
 use jni::objects::JByteBuffer;

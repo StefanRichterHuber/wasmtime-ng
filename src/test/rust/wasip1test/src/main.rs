@@ -1,5 +1,5 @@
-use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{env, process};
 
 fn main() {
     println!("Hello, WASI!");
@@ -28,4 +28,6 @@ fn main() {
         wasi::random_get(random_buf.as_mut_ptr(), random_buf.len()).expect("random_get failed");
     }
     println!("Random values: {:?}", random_buf);
+
+    process::exit(0);
 }

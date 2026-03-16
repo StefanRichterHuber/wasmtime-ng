@@ -2,7 +2,7 @@ use jni::{bind_java_type, objects::JPrimitiveArray, sys::jlong};
 use log::debug;
 use wasmtime::Engine;
 
-use crate::wasminstance::handle_wasmtime_error;
+use crate::wasmexception::handle_wasmtime_error;
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
@@ -52,7 +52,7 @@ bind_java_type! {
     native_methods {
         extern fn close_engine(handle: EngineHandle),
         extern fn create_engine() -> jlong,
-        extern fn precompile(handle: EngineHandle,src: JByteBuffer ) -> jbyte[],
+        extern fn precompile(handle: EngineHandle, src: JByteBuffer) -> jbyte[],
         extern static fn init_logging(level: jint)
     },
 }

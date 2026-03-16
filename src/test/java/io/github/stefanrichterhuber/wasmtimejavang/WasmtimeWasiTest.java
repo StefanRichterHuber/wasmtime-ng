@@ -10,6 +10,7 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.LoggerOutputStream;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip1.ProcExitException;
 
 public class WasmtimeWasiTest {
     private static final String WASM_PATH = "target/rust-test/wasip1test/wasm32-wasip1/debug/wasip1test.wasm";
@@ -29,10 +30,13 @@ public class WasmtimeWasiTest {
                     .withArguments(List.of("wasip1test.wasm", "hello", "world"))
                     .withStdOut(new LoggerOutputStream("wasip1test", Level.INFO))
                     .withStdErr(new LoggerOutputStream("wasip1test", Level.ERROR)));
-
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
                 Object[] result = instance.start();
                 assertNotNull(result);
+            } catch (ProcExitException e) {
+                if (e.getCode() != 0) {
+                    throw e;
+                }
             }
 
         }

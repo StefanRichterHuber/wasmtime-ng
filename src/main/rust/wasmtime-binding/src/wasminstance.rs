@@ -6,6 +6,7 @@ use crate::java_numbers::JInteger;
 use crate::java_numbers::JLong;
 use crate::java_numbers::JNumber;
 use crate::wasmengine::EngineHandle;
+use crate::wasmexception::handle_wasmtime_error;
 use crate::wasmlinker::JWasmtimeLinker;
 use crate::wasmlinker::LinkerHandle;
 use crate::wasmmemory::JWasmtimeLocalMemory;
@@ -218,6 +219,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
                             convert_val_vector_to_java_array(env, &store, &results)
                         }
                         Err(e) => {
+                            debug!("Failed to call function {}: {}", name, e);
                             handle_wasmtime_error(env, e)?;
                             empty_array(env, result_len.try_into().unwrap())
                         }
@@ -278,21 +280,6 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
             Ok(JWasmtimeFuncRef::null())
         }
     }
-}
-
-///
-/// Throws a java RuntimeException from a wasmtime::Error
-///
-pub fn handle_wasmtime_error<'local>(
-    env: &mut ::jni::Env<'local>,
-    e: wasmtime::Error,
-) -> ::std::result::Result<(), jni::errors::Error> {
-    let messages: Vec<_> = e.chain().map(|e| e.to_string()).collect();
-    let msg = messages.join("\n");
-    debug!("Wasmtime error: {}", msg);
-    let msg = JNIString::from(msg);
-    env.throw_new(jni_str!("java/lang/RuntimeException"), msg)?;
-    Ok(())
 }
 
 ///

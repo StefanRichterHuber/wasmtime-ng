@@ -2,6 +2,7 @@ pub mod java_numbers;
 pub mod logging;
 pub mod wasmcontext;
 pub mod wasmengine;
+pub mod wasmexception;
 pub mod wasminstance;
 pub mod wasmlinker;
 pub mod wasmmemory;

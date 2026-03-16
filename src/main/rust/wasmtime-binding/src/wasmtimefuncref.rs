@@ -1,3 +1,4 @@
+use crate::wasmexception::handle_wasmtime_error;
 use crate::wasminstance::with_instance;
 use crate::wasmtimefunction::JWasmtimeFunction;
 use crate::{wasminstance::JWasmtimeInstance, wasmstore::StoreContent};
@@ -8,7 +9,6 @@ use wasmtime::{AsContext, Func, Val};
 use crate::{
     wasminstance::{
         convert_java_array_to_val_vector, convert_val_vector_to_java_array, empty_array,
-        handle_wasmtime_error,
     },
     wasmstore::StoreHandle,
 };

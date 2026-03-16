@@ -211,4 +211,25 @@ public interface WasmtimeMemory {
      */
     void grow(long delta);
 
+    default WasmtimeMemory createView(int adr, int len) {
+        return new WasmtimeMemory() {
+
+            @Override
+            public ByteBuffer buffer() {
+                return WasmtimeMemory.this.buffer().slice(adr, len);
+            }
+
+            @Override
+            public boolean isShared() {
+                return false;
+            }
+
+            @Override
+            public void grow(long delta) {
+                throw new IllegalStateException("Grow is not supported for memory views");
+            }
+
+        };
+    }
+
 }

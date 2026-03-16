@@ -1,5 +1,6 @@
 use crate::{
-    wasmengine::EngineHandle, wasmengine::JWasmtimeEngine, wasminstance::handle_wasmtime_error,
+    wasmengine::{EngineHandle, JWasmtimeEngine},
+    wasmexception::handle_wasmtime_error,
 };
 use jni::{bind_java_type, sys::jlong};
 use log::debug;

@@ -61,7 +61,7 @@ public class WasmtimeMemoryTest {
                 assertEquals("Hello", mem.readCString(0x1000, StandardCharsets.UTF_8));
 
                 mem.writeString(0x1000, "World", StandardCharsets.UTF_8);
-                assertEquals("World", mem.readString(0x1000, "Hello".getBytes().length, StandardCharsets.UTF_8));
+                assertEquals("World", mem.readString(0x1000, "World".getBytes().length, StandardCharsets.UTF_8));
 
                 mem.writeLong(0x1000, Long.MAX_VALUE);
                 assertEquals(Long.MAX_VALUE, mem.readLong(0x1000));
@@ -74,6 +74,14 @@ public class WasmtimeMemoryTest {
 
                 mem.write(0x1000, Byte.MAX_VALUE);
                 assertEquals(Byte.MAX_VALUE, mem.readByte(0x1000));
+
+                // Get a view for a certain memory section
+                mem.writeString(0x1000, "World", StandardCharsets.UTF_8);
+                WasmtimeMemory view = mem.createView(0x1000, "World".getBytes().length);
+                assertEquals("World", view.readString(0, "World".getBytes().length, StandardCharsets.UTF_8));
+
+                view.writeString(0, "Hello", StandardCharsets.UTF_8);
+                assertEquals("Hello", mem.readString(0x1000, "Hello".getBytes().length, StandardCharsets.UTF_8));
 
                 // Grow to memory to have another page
                 mem.grow(1);

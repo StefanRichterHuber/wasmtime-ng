@@ -1,5 +1,7 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -168,11 +170,11 @@ public class WasmtimeEngineTest {
             });
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
-                Object[] result = instance.invoke("run");
+                instance.invoke("run");
                 fail("Exception must be thrown");
-                assertNotNull(result);
-            } catch (RuntimeException e) {
-                // exception expected
+            } catch (WasmRuntimeException e) {
+                assertInstanceOf(IllegalStateException.class, e.getCause());
+                assertEquals("This is a test exception", e.getCause().getMessage());
             }
 
         }
