@@ -1,6 +1,6 @@
 use std::fs;
-use std::io::{Read, Write, Seek, SeekFrom};
-use std::os::wasi::io::AsRawFd;
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::os::fd::AsRawFd;
 
 fn main() -> std::io::Result<()> {
     // 1. Read input.txt (created by Java)
@@ -26,7 +26,7 @@ fn main() -> std::io::Result<()> {
     let rename_dst = "test_rename_dir/moved.txt";
     fs::File::create(rename_src)?.write_all(b"rename test")?;
     fs::rename(rename_src, rename_dst)?;
-    
+
     // Verify rename worked
     let mut rename_content = String::new();
     fs::File::open(rename_dst)?.read_to_string(&mut rename_content)?;
@@ -43,16 +43,20 @@ fn main() -> std::io::Result<()> {
 
     // fd_allocate
     println!("  fd_allocate...");
-    unsafe { wasi::fd_allocate(fd as wasi::Fd, 0, 1024).expect("fd_allocate failed"); }
+    unsafe {
+        wasi::fd_allocate(fd as wasi::Fd, 0, 1024).expect("fd_allocate failed");
+    }
 
     // fd_filestat_set_size
     println!("  fd_filestat_set_size...");
-    unsafe { wasi::fd_filestat_set_size(fd as wasi::Fd, 512).expect("fd_filestat_set_size failed"); }
+    unsafe {
+        wasi::fd_filestat_set_size(fd as wasi::Fd, 512).expect("fd_filestat_set_size failed");
+    }
 
     // fd_seek
     println!("  fd_seek...");
     file.seek(SeekFrom::Start(10))?;
-    
+
     // fd_tell (part of fd_seek in std)
     let pos = file.stream_position()?;
     assert_eq!(pos, 10);
@@ -75,7 +79,8 @@ fn main() -> std::io::Result<()> {
     // fd_fdstat_set_flags
     println!("  fd_fdstat_set_flags...");
     unsafe {
-        wasi::fd_fdstat_set_flags(fd as wasi::Fd, wasi::FDFLAGS_APPEND).expect("fd_fdstat_set_flags failed");
+        wasi::fd_fdstat_set_flags(fd as wasi::Fd, wasi::FDFLAGS_APPEND)
+            .expect("fd_fdstat_set_flags failed");
     }
 
     // fd_pread
@@ -86,7 +91,7 @@ fn main() -> std::io::Result<()> {
             buf: pread_buf.as_mut_ptr(),
             buf_len: pread_buf.len(),
         }];
-        wasi::fd_pread(fd as wasi::Fd, &iov, 10,).expect("fd_pread failed");
+        wasi::fd_pread(fd as wasi::Fd, &iov, 10).expect("fd_pread failed");
     }
     assert_eq!(&pread_buf, b"Hello FD");
 
@@ -109,7 +114,7 @@ fn main() -> std::io::Result<()> {
 
     // 6. Path operations
     println!("Testing Path operations...");
-    
+
     // path_link
     println!("  path_link...");
     let hardlink_path = "hardlink_to_input.txt";
@@ -131,7 +136,8 @@ fn main() -> std::io::Result<()> {
             1000,
             2000,
             wasi::FSTFLAGS_ATIM | wasi::FSTFLAGS_MTIM,
-        ).expect("path_filestat_set_times failed");
+        )
+        .expect("path_filestat_set_times failed");
     }
 
     // path_unlink_file
