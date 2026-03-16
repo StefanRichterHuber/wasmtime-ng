@@ -211,6 +211,13 @@ public interface WasmtimeMemory {
      */
     void grow(long delta);
 
+    /**
+     * Creates a view of a part of the whole memory
+     * 
+     * @param adr Address of the part
+     * @param len Length of the part
+     * @return WasmtimeMemory view
+     */
     default WasmtimeMemory createView(int adr, int len) {
         return new WasmtimeMemory() {
 
