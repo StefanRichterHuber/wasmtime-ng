@@ -67,17 +67,27 @@ pub struct StoreHandle(*mut Store<StoreContent>);
 impl StoreHandle {
     pub fn new(store: Store<StoreContent>) -> Self {
         let boxed = Box::new(store);
-        let handle = StoreHandle(Box::into_raw(boxed));
+        let mut handle = StoreHandle(Box::into_raw(boxed));
         unsafe { handle.as_ref().data_mut().store_content_ptr = Some(handle.0) };
         handle
     }
 
-    pub unsafe fn as_ref(&self) -> &mut Store<StoreContent> {
+    /// Returns a mutable reference to the underlying `Store`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying raw pointer is valid and that the `Store` it points to has not been dropped.
+    /// As this returns a mutable reference, the caller must also ensure that no other references (mutable or immutable) to the same `Store` exist simultaneously to avoid aliasing violations.
+    pub unsafe fn as_ref(&mut self) -> &mut Store<StoreContent> {
         unsafe { &mut *self.0 }
     }
 
+    /// Converts the raw pointer back into a `Box<Store<StoreContent>>`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying raw pointer is valid and has not already been freed.
+    /// Calling this method transfers ownership to the returned `Box`, so the raw pointer must not be used afterwards to avoid double-free or use-after-free errors.
     pub unsafe fn into_box(self) -> Box<Store<StoreContent>> {
-        unsafe { Box::from_raw(self.0 as *mut Store<StoreContent>) }
+        unsafe { Box::from_raw(self.0) }
     }
 }
 

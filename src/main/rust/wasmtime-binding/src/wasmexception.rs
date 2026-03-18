@@ -86,7 +86,7 @@ impl std::error::Error for ExceptionWrapper {
 pub fn convert_jvm_error_to_wasmtime_error(
     jvm_error: jni::errors::Error,
 ) -> wasmtime::error::Error {
-    let result = match jvm_error {
+     match jvm_error {
         jni::errors::Error::CaughtJavaException {
             stack,
             exception,
@@ -104,9 +104,7 @@ pub fn convert_jvm_error_to_wasmtime_error(
             wasmtime::error::Error::new(w)
         }
         _ => wasmtime::error::Error::msg(jvm_error.to_string()),
-    };
-
-    result
+    }
 }
 
 ///
@@ -156,7 +154,7 @@ pub fn handle_wasmtime_error<'local>(
     }
 
     // Then check if there is some Java Exception in the stack trace
-    for c in e.chain().into_iter() {
+    for c in e.chain() {
         if let Some(w) = c.downcast_ref::<ExceptionWrapper>() {
             // We create a new exception with this one as cause
             debug!("ExceptionWrapper found in wasmtime stack trace");
