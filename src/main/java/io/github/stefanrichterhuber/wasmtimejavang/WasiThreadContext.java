@@ -2,7 +2,6 @@ package io.github.stefanrichterhuber.wasmtimejavang;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -101,7 +100,6 @@ public class WasiThreadContext implements WasmContext {
                 LOGGER.error("Error in wasi-thread start", e);
             }
         });
-
         return new Object[] { tid };
 
     }

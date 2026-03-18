@@ -25,12 +25,22 @@ impl LinkerHandle {
         LinkerHandle(Box::into_raw(boxed))
     }
 
-    pub unsafe fn as_ref(&self) -> &mut Linker<StoreContent> {
+    /// Returns a mutable reference to the underlying `Linker`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying raw pointer is valid and that the `Linker` it points to has not been dropped.
+    /// As this returns a mutable reference, the caller must also ensure that no other references (mutable or immutable) to the same `Linker` exist simultaneously to avoid aliasing violations.
+    pub unsafe fn as_ref(&mut self) -> &mut Linker<StoreContent> {
         unsafe { &mut *self.0 }
     }
 
+    /// Converts the raw pointer back into a `Box<Linker<StoreContent>>`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying raw pointer is valid and has not already been freed.
+    /// Calling this method transfers ownership to the returned `Box`, so the raw pointer must not be used afterwards to avoid double-free or use-after-free errors.
     pub unsafe fn into_box(self) -> Box<Linker<StoreContent>> {
-        unsafe { Box::from_raw(self.0 as *mut Linker<StoreContent>) }
+        unsafe { Box::from_raw(self.0 ) }
     }
 }
 
@@ -115,7 +125,7 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         _this: JWasmtimeLinker<'local>,
         engine: EngineHandle,
         store: StoreHandle,
-        linker: LinkerHandle,
+        mut linker: LinkerHandle,
         func: JWasmtimeFunction,
         module: ::jni::objects::JString<'local>,
         name: ::jni::objects::JString<'local>,
@@ -198,7 +208,7 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
         env: &mut ::jni::Env<'local>,
         _this: JWasmtimeLinker<'local>,
         store: StoreHandle,
-        linker: LinkerHandle,
+        mut linker: LinkerHandle,
         shared_memory: SharedMemoryHandle,
         module: ::jni::objects::JString<'local>,
         name: ::jni::objects::JString<'local>,

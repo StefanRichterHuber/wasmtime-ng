@@ -45,10 +45,19 @@ impl InstanceHandle {
         InstanceHandle(Box::into_raw(boxed))
     }
 
+    /// Returns a reference to the underlying `Instance`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying raw pointer is valid and that the `Instance` it points to has not been dropped.
     pub unsafe fn as_ref(&self) -> &Instance {
         unsafe { &*self.0 }
     }
 
+    /// Converts the raw pointer back into a `Box<Instance>`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying raw pointer is valid and has not already been freed.
+    /// Calling this method transfers ownership to the returned `Box`, so the raw pointer must not be used afterwards to avoid double-free or use-after-free errors.
     pub unsafe fn into_box(self) -> Box<Instance> {
         unsafe { Box::from_raw(self.0 as *mut Instance) }
     }
@@ -104,7 +113,7 @@ bind_java_type! {
 }
 
 thread_local! {
-    static ACTIVE_INSTANCE: RefCell<Vec<Global<JWasmtimeInstance<'static>>>> = RefCell::new(Vec::new());
+    static ACTIVE_INSTANCE: RefCell<Vec<Global<JWasmtimeInstance<'static>>>> = const { RefCell::new(Vec::new()) };
 }
 
 struct InstanceGuard(bool);
@@ -142,7 +151,7 @@ where
 
             if let Some(current) = s.last() {
                 // If the last instance on the stack is the same as the given one, don't push another copy and return a no-op guard
-                if env.is_same_object(&current_instance, &current)? {
+                if env.is_same_object(&current_instance, current)? {
                     debug!("With instance: {:?} (same)", current_instance);
                     Ok(InstanceGuard(false))
                 } else {
@@ -202,7 +211,8 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         let instance_obj = env.new_global_ref(this)?;
         let name = name.to_string();
 
-        let result = with_instance(env, Some(instance_obj), |env, _| {
+        
+        with_instance(env, Some(instance_obj), |env, _| {
             match instance.get_func(store, &name) {
                 Some(func) => {
                     let param_types: Vec<wasmtime::ValType> = func.ty(store).params().collect();
@@ -232,8 +242,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
                     empty_array(env, 0)
                 }
             }
-        });
-        result
+        })
     }
 
     fn create_instance<'local>(
@@ -241,7 +250,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         _this: JWasmtimeInstance<'local>,
         module: ModuleHandle,
         store: StoreHandle,
-        linker: LinkerHandle,
+        mut linker: LinkerHandle,
     ) -> ::std::result::Result<::jni::sys::jlong, Self::Error> {
         let linker = unsafe { linker.as_ref() };
         debug!("Start createing new instance");
@@ -350,7 +359,7 @@ where
         Val::ExternRef(rooted) => {
             if let Some(reference) = rooted {
                 let global = reference
-                    .data(&store)
+                    .data(store)
                     .and_then(|global| {
                         global.ok_or(wasmtime::Error::msg("failed to unpack externref"))
                     })
@@ -360,7 +369,8 @@ where
                             .ok_or(wasmtime::Error::msg("failed to downcast externref"))
                     });
 
-                let value = match global {
+                
+                match global {
                     Ok(g) => {
                         debug!("Successfully unpacked ExternRef value");
                         Some(unsafe { JObject::from_raw(env, g.value.as_obj().as_raw()) })
@@ -369,8 +379,7 @@ where
                         error!("Failed to unpack ExternRef value: {}", e);
                         None
                     }
-                };
-                value
+                }
             } else {
                 None
             }
@@ -502,7 +511,7 @@ where
                 debug!("Creating EXTERNREF from any java object");
                 let global_item = env.new_global_ref(item)?;
                 let container = ExternRefContainer::new(global_item);
-                let r = ExternRef::new(store, container).and_then(|r| Ok(Val::ExternRef(Some(r))));
+                let r = ExternRef::new(store, container).map(|r| Val::ExternRef(Some(r)));
 
                 match r {
                     Ok(r) => r,
@@ -541,7 +550,7 @@ where
     // Missing values are replaced with java null
     let mut result = Vec::with_capacity(param_types.len());
     let values_len = if values.is_null() {
-        if param_types.len() > 0 {
+        if !param_types.is_empty() {
             warn!(
                 "Wasm function expects {} args, but given args are null. All args are considered as java null",
                 param_types.len()
