@@ -1,5 +1,10 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+/**
+ * This represents any exception thrown from the native wasm context. It
+ * contains a message and a wasm stack trace. If the original error was java
+ * exception, it is wrapped as cause of the exception
+ */
 public class WasmRuntimeException extends RuntimeException {
     private String wasmStack;
 

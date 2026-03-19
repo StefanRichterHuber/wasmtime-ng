@@ -66,7 +66,7 @@ impl<'local> JV128<'local> {
     }
 
     pub fn into_byte_slice(
-        self: &Self,
+        &self,
         env: &mut ::jni::Env<'local>,
     ) -> Result<[u8; 16], jni::errors::Error> {
         let value_array = self.get_bytes(env)?;

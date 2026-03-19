@@ -22,10 +22,19 @@ impl FuncHandle {
         FuncHandle(Box::into_raw(boxed))
     }
 
+    /// Returns a reference to the underlying `Func`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying raw pointer is valid and that the `Func` it points to has not been dropped.
     pub unsafe fn as_ref(&self) -> &Func {
         unsafe { &*self.0 }
     }
 
+    /// Converts the raw pointer back into a `Box<Func>`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying raw pointer is valid and has not already been freed.
+    /// Calling this method transfers ownership to the returned `Box`, so the raw pointer must not be used afterwards to avoid double-free or use-after-free errors.
     pub unsafe fn into_box(self) -> Box<Func> {
         unsafe { Box::from_raw(self.0 as *mut Func) }
     }

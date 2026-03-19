@@ -154,7 +154,7 @@ pub fn handle_wasmtime_error<'local>(
     }
 
     // Then check if there is some Java Exception in the stack trace
-    for c in e.chain().into_iter() {
+    for c in e.chain() {
         if let Some(w) = c.downcast_ref::<ExceptionWrapper>() {
             // We create a new exception with this one as cause
             debug!("ExceptionWrapper found in wasmtime stack trace");

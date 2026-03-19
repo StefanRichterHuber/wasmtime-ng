@@ -14,10 +14,19 @@ impl EngineHandle {
         EngineHandle(Box::into_raw(boxed))
     }
 
+    /// Returns a reference to the underlying `Engine`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying raw pointer is valid and that the `Engine` it points to has not been dropped.
     pub unsafe fn as_ref(&self) -> &Engine {
         unsafe { &*self.0 }
     }
 
+    /// Converts the raw pointer back into a `Box<Engine>`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying raw pointer is valid and has not already been freed.
+    /// Calling this method transfers ownership to the returned `Box`, so the raw pointer must not be used afterwards to avoid double-free or use-after-free errors.
     pub unsafe fn into_box(self) -> Box<Engine> {
         unsafe { Box::from_raw(self.0 as *mut Engine) }
     }
@@ -121,7 +130,7 @@ impl JWasmtimeEngineNativeInterface for JWasmtimeEngineAPI {
                 let result: &[i8] = unsafe {
                     std::slice::from_raw_parts(result.as_ptr() as *const i8, result.len())
                 };
-                result_array.set_region(env, 0, &result)?;
+                result_array.set_region(env, 0, result)?;
                 Ok(result_array)
             }
             Err(e) => {
