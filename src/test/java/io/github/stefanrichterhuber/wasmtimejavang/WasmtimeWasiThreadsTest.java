@@ -37,9 +37,7 @@ public class WasmtimeWasiThreadsTest {
 
             WasiThreadContext threadContext = new WasiThreadContext();
 
-            linker.defineSharedMemory("env", "memory", sharedMemory);
-            linker.link(wasiContext);
-            linker.link(threadContext);
+            linker.linkMemory("env", "memory", sharedMemory).linkContext(wasiContext).linkContext(threadContext);
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
                 instance.start();
@@ -74,9 +72,9 @@ public class WasmtimeWasiThreadsTest {
 
             WasiThreadContext threadContext = new WasiThreadContext(Executors.newSingleThreadExecutor());
 
-            linker.defineSharedMemory("env", "memory", sharedMemory);
-            linker.link(wasiContext);
-            linker.link(threadContext);
+            linker.linkMemory("env", "memory", sharedMemory);
+            linker.linkContext(wasiContext);
+            linker.linkContext(threadContext);
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
                 instance.start();

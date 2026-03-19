@@ -78,7 +78,7 @@ public class WasmtimeEngineTest {
                 WasmtimeStore store = new WasmtimeStore(engine);
                 WasmtimeLinker linker = new WasmtimeLinker(engine, store);) {
 
-            linker.importFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
+            linker.linkFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
                 return new Object[] { 0 };
             });
         }
@@ -94,7 +94,7 @@ public class WasmtimeEngineTest {
 
         ) {
             // Add a java native function which the wasm runtime can call
-            linker.importFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
+            linker.linkFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
                 LOGGER.info("Function env::hello called");
                 return new Object[] { 0 };
             });
@@ -116,7 +116,7 @@ public class WasmtimeEngineTest {
 
         ) {
             store.getContext().put("greeting", "Hello world");
-            linker.importFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
+            linker.linkFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
                 LOGGER.info("Function env::hello called with greeting: " + instance.getContext().get("greeting"));
                 return new Object[] {};
             });
@@ -142,7 +142,7 @@ public class WasmtimeEngineTest {
 
         ) {
             store.getContext().put("greeting", "Hello world");
-            linker.importFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
+            linker.linkFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
                 LOGGER.info("Function env::hello called with greeting: " + instance.getContext().get("greeting"));
                 return new Object[] {};
             });
@@ -165,7 +165,7 @@ public class WasmtimeEngineTest {
                 WasmtimeLinker linker = new WasmtimeLinker(engine, store);
 
         ) {
-            linker.importFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
+            linker.linkFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
                 throw new IllegalStateException("This is a test exception");
             });
 
@@ -198,7 +198,7 @@ public class WasmtimeEngineTest {
 
         ) {
             store.getContext().put("greeting", "Hello world");
-            linker.importFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
+            linker.linkFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
                 LOGGER.info("Function env::hello called with greeting: " + instance.getContext().get("greeting"));
                 return new Object[] {};
             });

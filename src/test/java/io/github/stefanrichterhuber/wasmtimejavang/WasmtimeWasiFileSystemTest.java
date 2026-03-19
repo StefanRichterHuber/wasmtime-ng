@@ -35,7 +35,7 @@ public class WasmtimeWasiFileSystemTest {
             String inputContent = "Hello from Java!";
             Files.writeString(inputPath, inputContent);
 
-            linker.link(new WasiPI1Context()
+            linker.linkContext(new WasiPI1Context()
                     .withDirectory(root, ".")
                     .withStdOut(System.out)
                     .withStdErr(System.err));

@@ -31,7 +31,7 @@ public class WasmtimeWasiSocketTest {
             int port = serverSocket.getLocalPort();
 
             // Prepare WASI context with the pre-opened server socket
-            linker.link(new WasiPI1Context()
+            linker.linkContext(new WasiPI1Context()
                     .withServerSocket(serverSocket)
                     .withStdOut(System.out)
                     .withStdErr(System.err));

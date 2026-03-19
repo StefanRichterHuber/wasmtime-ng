@@ -96,19 +96,47 @@ public final class WasmtimeLinker implements AutoCloseable {
      * 
      * @param contexts The collection of contexts providing imports (e.g., WASI
      *                 contexts).
+     * @return This WasmtimeLinker for method chaining
+     * @deprecated Use {@link #linkContexts(Iterable)} instead
      */
-    public void link(Iterable<? extends WasmContext> contexts) {
+    @Deprecated
+    public WasmtimeLinker link(Iterable<? extends WasmContext> contexts) {
+        return linkContexts(contexts);
+    }
+
+    /**
+     * Links all import functions from a collection of WasmContexts.
+     * 
+     * @param contexts The collection of contexts providing imports (e.g., WASI
+     *                 contexts).
+     * @return This WasmtimeLinker for method chaining
+     */
+    public WasmtimeLinker linkContexts(Iterable<? extends WasmContext> contexts) {
         for (WasmContext context : contexts) {
             this.link(context);
         }
+        return this;
     }
 
     /**
      * Links all import functions from a WasmContext.
      * 
      * @param context The context providing imports (e.g., a WASI context).
+     * @return This WasmtimeLinker for method chaining
+     * @deprecated Use {@link #linkContext(WasmContext)} instead
      */
-    public void link(WasmContext context) {
+    @Deprecated
+    public WasmtimeLinker link(WasmContext context) {
+        return linkContext(context);
+    }
+
+    /**
+     * Links all import functions from a WasmContext.
+     * 
+     * @param context The context providing imports (e.g., a WASI context).
+     * @return This WasmtimeLinker for method chaining
+     */
+    public WasmtimeLinker linkContext(WasmContext context) {
         this.contexts.add(context);
         LOGGER.debug("Adding context {} to store", context.name());
         for (WasmContext.ImportFunction importFunction : context.getImportFunctions()) {
@@ -121,6 +149,7 @@ public final class WasmtimeLinker implements AutoCloseable {
             this.defineMemory(getStore().getStorePtr(), getLinkerPtr(), memory.memory().getSharedMemoryPtr(),
                     memory.module(), memory.name());
         }
+        return this;
     }
 
     /**
@@ -131,8 +160,30 @@ public final class WasmtimeLinker implements AutoCloseable {
      * @param parameters  The parameter types of the function.
      * @param returnTypes The return types of the function.
      * @param f           The Java function implementation.
+     * @return This WasmtimeLinker for method chaining
+     * @deprecated Use
+     *             {@link #linkFunction(String, String, List, List, WasmtimeFunction)}
+     *             instead
      */
-    public void importFunction(String module, String name, List<ValType> parameters, List<ValType> returnTypes,
+    @Deprecated
+    public WasmtimeLinker importFunction(String module, String name, List<ValType> parameters,
+            List<ValType> returnTypes,
+            WasmtimeFunction f) {
+        return linkFunction(module, name, parameters, returnTypes, f);
+    }
+
+    /**
+     * Explicitly imports a Java function into the WASM module.
+     * 
+     * @param module      The name of the module providing the import.
+     * @param name        The name of the imported function.
+     * @param parameters  The parameter types of the function.
+     * @param returnTypes The return types of the function.
+     * @param f           The Java function implementation.
+     * @return This WasmtimeLinker for method chaining
+     */
+    public WasmtimeLinker linkFunction(String module, String name, List<ValType> parameters,
+            List<ValType> returnTypes,
             WasmtimeFunction f) {
 
         this.link(new WasmContext() {
@@ -151,6 +202,7 @@ public final class WasmtimeLinker implements AutoCloseable {
                 return String.format("function %s::%s(%s) -> %s", module, name, parameters, returnTypes);
             }
         });
+        return this;
     }
 
     /**
@@ -159,8 +211,24 @@ public final class WasmtimeLinker implements AutoCloseable {
      * @param module The module name for the shared memory import.
      * @param name   The name for the shared memory import.
      * @param memory The shared memory to define.
+     * @return This WasmtimeLinker for method chaining
+     * @deprecated Use {@link #linkMemory(String, String, WasmtimeSharedMemory)}
+     *             instead
      */
-    public void defineSharedMemory(String module, String name, WasmtimeSharedMemory memory) {
+    @Deprecated
+    public WasmtimeLinker defineSharedMemory(String module, String name, WasmtimeSharedMemory memory) {
+        return linkMemory(module, name, memory);
+    }
+
+    /**
+     * Links a shared memory
+     * 
+     * @param module The module name for the shared memory import.
+     * @param name   The name for the shared memory import.
+     * @param memory The shared memory to define.
+     * @return This WasmtimeLinker for method chaining
+     */
+    public WasmtimeLinker linkMemory(String module, String name, WasmtimeSharedMemory memory) {
         this.link(new WasmContext() {
             @Override
             public List<ImportFunction> getImportFunctions() {
@@ -177,6 +245,7 @@ public final class WasmtimeLinker implements AutoCloseable {
                 return String.format("shared memory %s::%s", module, name);
             }
         });
+        return this;
     }
 
     /**

@@ -37,7 +37,7 @@ public class WasmtimeWasiVFSTest {
             Path root = fs.getPath("/");
             Files.writeString(root.resolve("input.txt"), "Jimfs file content");
 
-            linker.link(new WasiPI1Context()
+            linker.linkContext(new WasiPI1Context()
                     .withDirectory(root, "/tmp")
                     .withArguments(List.of("wasip1vfstest", hostFile.toAbsolutePath().toString()))
                     .withStdOut(baos)

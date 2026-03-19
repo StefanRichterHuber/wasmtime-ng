@@ -25,7 +25,7 @@ public class WasmtimeValueTest {
                 WasmtimeLinker linker = new WasmtimeLinker(engine, store);
 
         ) {
-            linker.link(new WasiPI1Context());
+            linker.linkContext(new WasiPI1Context());
 
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
                 // I32
@@ -107,7 +107,7 @@ public class WasmtimeValueTest {
 
         ) {
             store.getContext().put("greeting", "Hello world");
-            linker.importFunction("env", "imported_func", List.of(ValType.F32), List.of(ValType.F32),
+            linker.linkFunction("env", "imported_func", List.of(ValType.F32), List.of(ValType.F32),
                     (instance, params) -> {
                         float p = (float) params[0];
                         float r = p * 3f;
@@ -141,7 +141,7 @@ public class WasmtimeValueTest {
 
         ) {
             store.getContext().put("greeting", "Hello world");
-            linker.importFunction("env", "imported_func", List.of(ValType.F64), List.of(ValType.F64),
+            linker.linkFunction("env", "imported_func", List.of(ValType.F64), List.of(ValType.F64),
                     (instance, params) -> {
                         double p = (double) params[0];
                         double r = p * 3d;
@@ -175,7 +175,7 @@ public class WasmtimeValueTest {
 
         ) {
             store.getContext().put("greeting", "Hello world");
-            linker.importFunction("env", "imported_func", List.of(ValType.I32), List.of(ValType.I32),
+            linker.linkFunction("env", "imported_func", List.of(ValType.I32), List.of(ValType.I32),
                     (instance, params) -> {
                         int p = (int) params[0];
                         int r = p * 3;
@@ -209,7 +209,7 @@ public class WasmtimeValueTest {
 
         ) {
             store.getContext().put("greeting", "Hello world");
-            linker.importFunction("env", "imported_func", List.of(ValType.I64), List.of(ValType.I64),
+            linker.linkFunction("env", "imported_func", List.of(ValType.I64), List.of(ValType.I64),
                     (instance, params) -> {
                         long p = (long) params[0];
                         long r = p * 3l;
@@ -269,7 +269,7 @@ public class WasmtimeValueTest {
 
         ) {
             store.getContext().put("greeting", "Hello world");
-            linker.importFunction("env", "imported_func", List.of(), List.of(),
+            linker.linkFunction("env", "imported_func", List.of(), List.of(),
                     (instance, params) -> {
                         return new Object[] {};
                     });
@@ -330,7 +330,7 @@ public class WasmtimeValueTest {
             AtomicInteger externRefValue = new AtomicInteger(0);
 
             store.getContext().put("greeting", "Hello world");
-            linker.importFunction("env", "imported_func", List.of(ValType.Ref), List.of(),
+            linker.linkFunction("env", "imported_func", List.of(ValType.Ref), List.of(),
                     (instance, params) -> {
                         AtomicInteger ai = (AtomicInteger) params[0];
                         ai.incrementAndGet();

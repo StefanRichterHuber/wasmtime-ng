@@ -25,7 +25,7 @@ public class WasmtimeWasiTest {
                 WasmtimeLinker linker = new WasmtimeLinker(engine, store);
 
         ) {
-            linker.link(new WasiPI1Context()
+            linker.linkContext(new WasiPI1Context()
                     .withEnvs(Map.of("FOO", "BAR", "BAZ", "QUX"))
                     .withArguments(List.of("wasip1test.wasm", "hello", "world"))
                     .withStdOut(new LoggerOutputStream("wasip1test", Level.INFO))
