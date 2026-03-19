@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import java.lang.ref.Cleaner;
 import java.util.Map;
 import java.util.Objects;
 
@@ -18,11 +19,26 @@ public final class WasmtimeInstance implements AutoCloseable {
 
     private native long createInstance(long modulePtr, long storePtr, long linkerPtr);
 
-    private native void closeInstance(long instancePtr);
+    private native static void closeInstance(long instancePtr);
 
     private native Object[] runWasmFunc(long storePtr, long instancePtr, String name, Object[] params);
 
     private native WasmtimeFunction getFunctionReference(long storePtr, long instancePtr, String name);
+
+    private final Cleaner.Cleanable cleanable;
+
+    private static class CleanState implements Runnable {
+        private final long instancePtr;
+
+        CleanState(long instancePtr) {
+            this.instancePtr = instancePtr;
+        }
+
+        @Override
+        public void run() {
+            WasmtimeInstance.closeInstance(instancePtr);
+        }
+    }
 
     /**
      * Creates a new WasmtimeInstance.
@@ -37,6 +53,7 @@ public final class WasmtimeInstance implements AutoCloseable {
         this.linker = Objects.requireNonNull(linker, "linker must not be null");
         this.instancePtr = createInstance(this.module.getModulePtr(), this.store.getStorePtr(),
                 this.linker.getLinkerPtr());
+        this.cleanable = WasmtimeEngine.CLEANER.register(this, new CleanState(this.instancePtr));
     }
 
     /**
@@ -45,7 +62,7 @@ public final class WasmtimeInstance implements AutoCloseable {
     @Override
     public void close() throws Exception {
         if (instancePtr != 0) {
-            this.closeInstance(instancePtr);
+            cleanable.clean();
         }
         instancePtr = 0;
     }

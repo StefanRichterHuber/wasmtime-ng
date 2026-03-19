@@ -106,7 +106,7 @@ bind_java_type! {
 
     native_methods {
         extern fn create_instance(module: ModuleHandle, store: StoreHandle, linker: LinkerHandle ) -> jlong,
-        extern fn close_instance(instance: InstanceHandle),
+        extern static fn close_instance(instance: InstanceHandle),
         extern fn run_wasm_func(store: StoreHandle, instance: InstanceHandle, name: JString, parameters: JObject[]) -> JObject[],
         extern fn get_function_reference(store: StoreHandle,instance: InstanceHandle, name: JString) -> JWasmtimeFuncRef,
     }
@@ -190,7 +190,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
 
     fn close_instance<'local>(
         _env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeInstance<'local>,
+        _class: JClass<'local>,
         instance: InstanceHandle,
     ) -> ::std::result::Result<(), Self::Error> {
         debug!("Closing Instance");
@@ -211,9 +211,10 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         let instance_obj = env.new_global_ref(this)?;
         let name = name.to_string();
 
-        
-        with_instance(env, Some(instance_obj), |env, _| {
-            match instance.get_func(store, &name) {
+        with_instance(
+            env,
+            Some(instance_obj),
+            |env, local_instance| match instance.get_func(store, &name) {
                 Some(func) => {
                     let param_types: Vec<wasmtime::ValType> = func.ty(store).params().collect();
                     let result_types: Vec<wasmtime::ValType> = func.ty(store).results().collect();
@@ -226,7 +227,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
                     match func.call(store, &args, &mut results) {
                         Ok(()) => {
                             debug!("Successfully called function {}", name);
-                            convert_val_vector_to_java_array(env, &store, &results)
+                            convert_val_vector_to_java_array(env, &store, local_instance, &results)
                         }
                         Err(e) => {
                             debug!("Failed to call function {}: {}", name, e);
@@ -241,8 +242,8 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
                     env.throw_new(jni_str!("java/lang/RuntimeException"), msg)?;
                     empty_array(env, 0)
                 }
-            }
-        })
+            },
+        )
     }
 
     fn create_instance<'local>(
@@ -273,7 +274,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
 
     fn get_function_reference<'local>(
         env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeInstance<'local>,
+        this: JWasmtimeInstance<'local>,
         store: StoreHandle,
         instance: InstanceHandle,
         name: ::jni::objects::JString<'local>,
@@ -283,7 +284,7 @@ impl JWasmtimeInstanceNativeInterface for JWasmtimeInstanceAPI {
         let func = instance.get_func(store, &name);
 
         if let Some(f) = func {
-            let func_object = JWasmtimeFuncRef::from_func(env, &store, f)?;
+            let func_object = JWasmtimeFuncRef::from_func(env, &store, &this, f)?;
             Ok(func_object)
         } else {
             Ok(JWasmtimeFuncRef::null())
@@ -322,6 +323,7 @@ pub fn convert_val_to_java_object<'local, T>(
     env: &mut ::jni::Env<'local>,
     store: &T,
     value: &Val,
+    instance: &JWasmtimeInstance<'local>,
 ) -> Result<JObject<'local>, jni::errors::Error>
 where
     T: AsContext<Data = StoreContent>,
@@ -350,7 +352,7 @@ where
         }
         Val::FuncRef(func) => {
             if let Some(f) = func {
-                let func_object = JWasmtimeFuncRef::from_func(env, store, *f)?;
+                let func_object = JWasmtimeFuncRef::from_func(env, store, instance, *f)?;
                 Some(func_object.into())
             } else {
                 None
@@ -369,7 +371,6 @@ where
                             .ok_or(wasmtime::Error::msg("failed to downcast externref"))
                     });
 
-                
                 match global {
                     Ok(g) => {
                         debug!("Successfully unpacked ExternRef value");
@@ -410,6 +411,7 @@ where
 pub fn convert_val_vector_to_java_array<'local, T>(
     env: &mut ::jni::Env<'local>,
     store: &T,
+    instance: &JWasmtimeInstance<'local>,
     values: &[Val],
 ) -> Result<JObjectArray<'local>, jni::errors::Error>
 where
@@ -424,7 +426,7 @@ where
     )?;
 
     for (index, v) in values.iter().enumerate() {
-        let obj_ref = convert_val_to_java_object(env, store, v)?;
+        let obj_ref = convert_val_to_java_object(env, store, v, instance)?;
         array.set_element(env, index, obj_ref)?;
     }
 

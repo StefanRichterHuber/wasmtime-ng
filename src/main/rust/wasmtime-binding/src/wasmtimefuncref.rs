@@ -58,7 +58,7 @@ bind_java_type! {
     },
 
     constructors {
-        fn new(func: FuncHandle, store: StoreHandle),
+        fn new(func: FuncHandle, store: StoreHandle, instance: JWasmtimeInstance),
     },
 
     methods = {
@@ -71,6 +71,7 @@ bind_java_type! {
     },
 
     native_methods {
+        extern static fn close_native_func(func: FuncHandle),
         extern fn invoke_native_func(func: FuncHandle, store: StoreHandle, instance: JWasmtimeInstance, args: JObject[] ) -> JObject[]
     }
 }
@@ -87,7 +88,7 @@ impl JWasmtimeFuncRefNativeInterface for JWasmtimeFuncRefAPI {
         args: ::jni::objects::JObjectArray<'local, ::jni::objects::JObject<'local>>,
     ) -> ::std::result::Result<::jni::objects::JObjectArray<'local>, Self::Error> {
         let instance = env.new_global_ref(instance)?;
-        with_instance(env, Some(instance), |env, _| {
+        with_instance(env, Some(instance), |env, local_instance| {
             let func = unsafe { func.as_ref() };
             let param_types: Vec<wasmtime::ValType> = func.ty(store).params().collect();
             let result_types: Vec<wasmtime::ValType> = func.ty(store).results().collect();
@@ -98,7 +99,7 @@ impl JWasmtimeFuncRefNativeInterface for JWasmtimeFuncRefAPI {
             let result = match func.call(store, &args, &mut results) {
                 Ok(()) => {
                     debug!("Successfully called wrapped function");
-                    convert_val_vector_to_java_array(env, &store, &results)?
+                    convert_val_vector_to_java_array(env, &store, local_instance, &results)?
                 }
                 Err(e) => {
                     handle_wasmtime_error(env, e)?;
@@ -109,12 +110,23 @@ impl JWasmtimeFuncRefNativeInterface for JWasmtimeFuncRefAPI {
             Ok(result)
         })
     }
+
+    fn close_native_func<'local>(
+        _env: &mut ::jni::Env<'local>,
+        _class: ::jni::objects::JClass<'local>,
+        func: FuncHandle,
+    ) -> ::std::result::Result<(), Self::Error> {
+        debug!("Function reference closed");
+        drop(unsafe { func.into_box() });
+        Ok(())
+    }
 }
 
 impl<'local> JWasmtimeFuncRef<'local> {
     pub fn from_func<T>(
         env: &mut ::jni::Env<'local>,
         store: &T,
+        instance: &JWasmtimeInstance<'local>,
         func: Func,
     ) -> Result<Self, jni::errors::Error>
     where
@@ -127,6 +139,6 @@ impl<'local> JWasmtimeFuncRef<'local> {
         let data = context.data();
         let w: StoreHandle = data.store_content_ptr.unwrap().into();
 
-        JWasmtimeFuncRef::new(env, handle, w)
+        JWasmtimeFuncRef::new(env, handle, w, instance)
     }
 }

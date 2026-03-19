@@ -1,5 +1,5 @@
 use crate::{wasmengine::EngineHandle, wasmexception::handle_wasmtime_error};
-use jni::{bind_java_type, objects::JByteBuffer, sys::jlong};
+use jni::{bind_java_type, objects::{JByteBuffer, JClass}, sys::jlong};
 use log::debug;
 use wasmtime::{MemoryType, SharedMemory};
 
@@ -57,7 +57,7 @@ bind_java_type! {
 
     native_methods {
         extern fn create_shared_memory(engine: EngineHandle, initial_pages: jlong, max_pages: jlong) -> jlong,
-        extern fn close_shared_memory(shared_memory: SharedMemoryHandle),
+        extern static fn close_shared_memory(shared_memory: SharedMemoryHandle),
         extern fn get_direct_buffer(shared_memory: SharedMemoryHandle) -> JByteBuffer,
         extern fn get_memory_size(shared_memory: SharedMemoryHandle) -> jlong,
         extern fn grow_memory(shared_memory: SharedMemoryHandle, delta: jlong),
@@ -91,7 +91,7 @@ impl JWasmtimeSharedMemoryNativeInterface for JWasmtimeSharedMemoryAPI {
 
     fn close_shared_memory<'local>(
         _env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeSharedMemory<'local>,
+        _class: JClass<'local>,
         shared_memory: SharedMemoryHandle,
     ) -> ::std::result::Result<(), Self::Error> {
         debug!("SharedMemory closed");

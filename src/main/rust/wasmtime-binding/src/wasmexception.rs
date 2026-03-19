@@ -86,7 +86,7 @@ impl std::error::Error for ExceptionWrapper {
 pub fn convert_jvm_error_to_wasmtime_error(
     jvm_error: jni::errors::Error,
 ) -> wasmtime::error::Error {
-     match jvm_error {
+    match jvm_error {
         jni::errors::Error::CaughtJavaException {
             stack,
             exception,

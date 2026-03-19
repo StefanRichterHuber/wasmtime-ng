@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import java.lang.ref.Cleaner;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -26,7 +27,7 @@ public final class WasmtimeLinker implements AutoCloseable {
 
     private native long createLinker(long enginePtr);
 
-    private native void closeLinker(long linkerPtr);
+    private native static void closeLinker(long linkerPtr);
 
     private native void defineFunction(
             long enginePtr, long storePtr, long linkerPtr,
@@ -38,13 +39,29 @@ public final class WasmtimeLinker implements AutoCloseable {
             long storePtr, long linkerPtr, long sharedMemoryPtr,
             String module, String name);
 
+    private final Cleaner.Cleanable cleanable;
+
+    private static class CleanState implements Runnable {
+        private final long linkerPtr;
+
+        CleanState(long linkerPtr) {
+            this.linkerPtr = linkerPtr;
+        }
+
+        @Override
+        public void run() {
+            WasmtimeLinker.closeLinker(linkerPtr);
+        }
+
+    }
+
     /**
      * Closes the linker and releases native resources.
      */
     @Override
     public void close() throws Exception {
         if (linkerPtr != 0) {
-            this.closeLinker(linkerPtr);
+            this.cleanable.clean();
         }
         linkerPtr = 0;
     }
@@ -71,6 +88,7 @@ public final class WasmtimeLinker implements AutoCloseable {
         this.engine = Objects.requireNonNull(engine, "engine must not be null");
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.linkerPtr = createLinker(engine.getEnginePtr());
+        this.cleanable = WasmtimeEngine.CLEANER.register(this, new CleanState(this.linkerPtr));
     }
 
     /**
