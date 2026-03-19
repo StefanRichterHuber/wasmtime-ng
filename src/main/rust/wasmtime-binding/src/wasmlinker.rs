@@ -10,6 +10,7 @@ use crate::{
     wasmcontext::JWasmContext, wasmengine::EngineHandle, wasmengine::JWasmtimeEngine,
     wasmstore::JWasmtimeStore, wasmstore::StoreContent,
 };
+use jni::objects::JClass;
 use jni::{bind_java_type, sys::jlong};
 use log::debug;
 use wasmtime::{Func, FuncType, Linker};
@@ -30,7 +31,7 @@ impl LinkerHandle {
     }
 
     pub unsafe fn into_box(self) -> Box<Linker<StoreContent>> {
-        unsafe { Box::from_raw(self.0 as *mut Linker<StoreContent>) }
+        unsafe { Box::from_raw(self.0) }
     }
 }
 
@@ -71,7 +72,7 @@ bind_java_type! {
 
     native_methods {
         extern fn create_linker(engine: EngineHandle) -> jlong,
-        extern fn close_linker(linker: LinkerHandle),
+        extern static fn close_linker(linker: LinkerHandle),
         extern fn define_function(
             engine: EngineHandle,
             store: StoreHandle,
@@ -102,7 +103,7 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
 
     fn close_linker<'local>(
         _env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeLinker<'local>,
+        _class: JClass<'local>,
         linker: LinkerHandle,
     ) -> ::std::result::Result<(), Self::Error> {
         debug!("Linker closed");
@@ -156,7 +157,8 @@ impl JWasmtimeLinkerNativeInterface for JWasmtimeLinkerAPI {
                 .attach_current_thread(|env| {
                     with_instance(env, None, |env, instance_obj| {
                         // Convert the args to a JObjectArray
-                        let args_array = convert_val_vector_to_java_array(env, &caller, args)?;
+                        let args_array =
+                            convert_val_vector_to_java_array(env, &caller, instance_obj, args)?;
                         let result_array = func.call(env, instance_obj, args_array)?;
 
                         let result = convert_java_array_to_val_vector(

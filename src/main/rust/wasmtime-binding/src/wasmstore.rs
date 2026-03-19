@@ -1,5 +1,5 @@
 use crate::{wasmengine::EngineHandle, wasmengine::JWasmtimeEngine};
-use jni::{bind_java_type, objects::JMap, refs::Global, sys::jlong};
+use jni::{bind_java_type, objects::{JClass, JMap}, refs::Global, sys::jlong};
 use log::debug;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -158,7 +158,7 @@ bind_java_type! {
 
     native_methods {
         extern fn create_store(engine: EngineHandle, context: JMap) -> jlong,
-        extern fn close_store(store: StoreHandle)
+        extern static fn close_store(store: StoreHandle)
     }
 }
 
@@ -181,7 +181,7 @@ impl JWasmtimeStoreNativeInterface for JWasmtimeStoreAPI {
 
     fn close_store<'local>(
         _env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeStore<'local>,
+        _class: JClass<'local>,
         store: StoreHandle,
     ) -> ::std::result::Result<(), Self::Error> {
         debug!("Store closed");

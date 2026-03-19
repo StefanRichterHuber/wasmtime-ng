@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import java.lang.ref.Cleaner;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
@@ -17,13 +18,28 @@ public final class WasmtimeSharedMemory implements AutoCloseable, WasmtimeMemory
 
     private native long createSharedMemory(long enginePtr, long initialPages, long maxPages);
 
-    private native void closeSharedMemory(long sharedMemoryPtr);
+    private native static void closeSharedMemory(long sharedMemoryPtr);
 
     private native ByteBuffer getDirectBuffer(long sharedMemoryPtr);
 
     private native long getMemorySize(long sharedMemoryPtr);
 
     private native void growMemory(long sharedMemoryPtr, long delta);
+
+    private final Cleaner.Cleanable cleanable;
+
+    private static class CleanState implements Runnable {
+        private final long sharedMemoryPtr;
+
+        CleanState(long sharedMemoryPtr) {
+            this.sharedMemoryPtr = sharedMemoryPtr;
+        }
+
+        @Override
+        public void run() {
+            WasmtimeSharedMemory.closeSharedMemory(sharedMemoryPtr);
+        }
+    }
 
     /**
      * Creates a new WasmtimeSharedMemory.
@@ -35,6 +51,7 @@ public final class WasmtimeSharedMemory implements AutoCloseable, WasmtimeMemory
     public WasmtimeSharedMemory(WasmtimeEngine engine, long initialPages, long maxPages) {
         this.engine = Objects.requireNonNull(engine, "engine must not be null");
         this.sharedMemoryPtr = createSharedMemory(engine.getEnginePtr(), initialPages, maxPages);
+        this.cleanable = WasmtimeEngine.CLEANER.register(this, new CleanState(this.sharedMemoryPtr));
 
     }
 
@@ -80,7 +97,7 @@ public final class WasmtimeSharedMemory implements AutoCloseable, WasmtimeMemory
     @Override
     public void close() throws Exception {
         if (sharedMemoryPtr != 0) {
-            closeSharedMemory(sharedMemoryPtr);
+            this.cleanable.clean();
         }
         sharedMemoryPtr = 0;
     }

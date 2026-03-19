@@ -1,4 +1,4 @@
-use jni::{bind_java_type, objects::JPrimitiveArray, sys::jlong};
+use jni::{bind_java_type, objects::{JClass, JPrimitiveArray}, sys::jlong};
 use log::debug;
 use wasmtime::Engine;
 
@@ -50,7 +50,7 @@ bind_java_type! {
     },
 
     native_methods {
-        extern fn close_engine(handle: EngineHandle),
+        extern static fn close_engine(handle: EngineHandle),
         extern fn create_engine() -> jlong,
         extern fn precompile(handle: EngineHandle, src: JByteBuffer) -> jbyte[],
         extern static fn init_logging(level: jint)
@@ -62,7 +62,7 @@ impl JWasmtimeEngineNativeInterface for JWasmtimeEngineAPI {
 
     fn close_engine<'local>(
         _env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeEngine<'local>,
+        _clazz: JClass<'local>,
         handle: EngineHandle,
     ) -> ::std::result::Result<(), Self::Error> {
         debug!("Engine closed");

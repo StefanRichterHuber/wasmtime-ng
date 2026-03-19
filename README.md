@@ -225,6 +225,8 @@ There is some preliminary support for WASI threads using the additional context 
 
 ```
 
+> **Info:** As of now, nightly toolchain is required to properly build rust wasm wasip1 apps with thread support!
+
 ## Architecture
 
 The project is structured into three distinct layers:

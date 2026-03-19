@@ -2,7 +2,7 @@ use crate::{
     wasmengine::{EngineHandle, JWasmtimeEngine},
     wasmexception::handle_wasmtime_error,
 };
-use jni::{bind_java_type, sys::jlong};
+use jni::{bind_java_type, objects::JClass, sys::jlong};
 use log::debug;
 use wasmtime::Module;
 
@@ -56,7 +56,7 @@ bind_java_type! {
     native_methods {
         extern fn create_module(engine: EngineHandle, src: JByteBuffer ) -> jlong,
         extern fn create_module_from_precompiled(engine: EngineHandle, src: JByteBuffer ) -> jlong,
-        extern fn close_module(module: ModuleHandle)
+        extern static fn close_module(module: ModuleHandle)
     }
 }
 
@@ -65,7 +65,7 @@ impl JWasmtimeModuleNativeInterface for JWasmtimeModuleAPI {
 
     fn close_module<'local>(
         _env: &mut ::jni::Env<'local>,
-        _this: JWasmtimeModule<'local>,
+        _class: JClass<'local>,
         module: ModuleHandle,
     ) -> ::std::result::Result<(), Self::Error> {
         debug!("Module closed");

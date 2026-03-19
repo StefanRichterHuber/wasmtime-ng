@@ -82,18 +82,12 @@ impl<'local> JV128<'local> {
         Ok(u8_array)
     }
 
-    pub fn into_u128(
-        self: &Self,
-        env: &mut ::jni::Env<'local>,
-    ) -> Result<u128, jni::errors::Error> {
+    pub fn into_u128(&self, env: &mut ::jni::Env<'local>) -> Result<u128, jni::errors::Error> {
         let u8_array = self.into_byte_slice(env)?;
         Ok(u128::from_le_bytes(u8_array))
     }
 
-    pub fn into_v128(
-        self: &Self,
-        env: &mut ::jni::Env<'local>,
-    ) -> Result<V128, jni::errors::Error> {
+    pub fn into_v128(&self, env: &mut ::jni::Env<'local>) -> Result<V128, jni::errors::Error> {
         let value = self.into_u128(env)?;
         Ok(V128::from(value))
     }

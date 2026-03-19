@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import java.lang.ref.Cleaner;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,7 +23,22 @@ public final class WasmtimeStore implements AutoCloseable {
 
     private native long createStore(long enginePtr, Map<String, Object> context);
 
-    private native void closeStore(long storePtr);
+    private native static void closeStore(long storePtr);
+
+    private final Cleaner.Cleanable cleanable;
+
+    private static class CleanState implements Runnable {
+        private final long storePtr;
+
+        CleanState(long storePtr) {
+            this.storePtr = storePtr;
+        }
+
+        @Override
+        public void run() {
+            WasmtimeStore.closeStore(storePtr);
+        }
+    }
 
     /**
      * Global context. Thread-safe
@@ -35,7 +51,7 @@ public final class WasmtimeStore implements AutoCloseable {
     @Override
     public void close() throws Exception {
         if (storePtr != 0) {
-            this.closeStore(storePtr);
+            this.cleanable.clean();
         }
         storePtr = 0;
     }
@@ -63,6 +79,7 @@ public final class WasmtimeStore implements AutoCloseable {
         this.context = Objects.requireNonNull(context, "context must not be null");
         this.engine = Objects.requireNonNull(engine, "engine must not be null");
         this.storePtr = createStore(engine.getEnginePtr(), this.context);
+        this.cleanable = WasmtimeEngine.CLEANER.register(this, new CleanState(this.storePtr));
     }
 
     /**

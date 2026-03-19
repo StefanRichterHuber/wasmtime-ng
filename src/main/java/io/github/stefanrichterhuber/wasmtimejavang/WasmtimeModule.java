@@ -3,6 +3,7 @@ package io.github.stefanrichterhuber.wasmtimejavang;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.Cleaner;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
@@ -28,9 +29,25 @@ public final class WasmtimeModule implements AutoCloseable {
 
     private native long createModule(long enginePtr, ByteBuffer source);
 
-    private native void closeModule(long modulePtr);
+    private native static void closeModule(long modulePtr);
 
     private native long createModuleFromPrecompiled(long enginePtr, ByteBuffer source);
+
+    private final Cleaner.Cleanable cleanable;
+
+    private static class CleanState implements Runnable {
+        private final long modulePtr;
+
+        CleanState(long modulePtr) {
+            this.modulePtr = modulePtr;
+        }
+
+        @Override
+        public void run() {
+            WasmtimeModule.closeModule(modulePtr);
+        }
+
+    }
 
     /**
      * Compiles a WebAssembly module from a binary buffer.
@@ -50,6 +67,7 @@ public final class WasmtimeModule implements AutoCloseable {
         } else {
             this.modulePtr = createModule(engine.getEnginePtr(), createByteBuffer(source));
         }
+        this.cleanable = WasmtimeEngine.CLEANER.register(this, new CleanState(this.modulePtr));
     }
 
     /**
@@ -237,7 +255,7 @@ public final class WasmtimeModule implements AutoCloseable {
     @Override
     public void close() throws Exception {
         if (modulePtr != 0) {
-            this.closeModule(modulePtr);
+            this.cleanable.clean();
         }
         modulePtr = 0;
     }

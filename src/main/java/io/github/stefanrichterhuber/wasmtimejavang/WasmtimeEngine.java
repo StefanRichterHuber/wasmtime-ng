@@ -4,6 +4,7 @@ import io.questdb.jar.jni.JarJniLoader;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.Cleaner;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
@@ -20,6 +21,22 @@ import org.apache.logging.log4j.Logger;
 public final class WasmtimeEngine implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final Logger NATIVE_LOGGER = LogManager.getLogger("[Wasmtime native library]");
+
+    static final Cleaner CLEANER = Cleaner.create();
+    private final Cleaner.Cleanable cleanable;
+
+    private static class CleanState implements Runnable {
+        private final long enginePtr;
+
+        CleanState(long enginePtr) {
+            this.enginePtr = enginePtr;
+        }
+
+        @Override
+        public void run() {
+            WasmtimeEngine.closeEngine(enginePtr);
+        }
+    }
 
     /**
      * Initializes the logging for the native library. Only allowed to be called
@@ -83,7 +100,7 @@ public final class WasmtimeEngine implements AutoCloseable {
 
     private native long createEngine();
 
-    private native void closeEngine(long enginePtr);
+    private static native void closeEngine(long enginePtr);
 
     private native byte[] precompile(long enginePtr, ByteBuffer wat);
 
@@ -92,6 +109,7 @@ public final class WasmtimeEngine implements AutoCloseable {
      */
     public WasmtimeEngine() {
         this.enginePtr = createEngine();
+        this.cleanable = CLEANER.register(this, new CleanState(this.enginePtr));
     }
 
     /**
@@ -112,7 +130,7 @@ public final class WasmtimeEngine implements AutoCloseable {
     @Override
     public void close() throws Exception {
         if (enginePtr != 0) {
-            this.closeEngine(this.enginePtr);
+            this.cleanable.clean();
         }
         enginePtr = 0;
     }

@@ -24,6 +24,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.DirectoryWasiFileDescriptor;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.FileWasiFileDescriptor;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.NoOpInputStream;
@@ -47,6 +50,7 @@ import io.github.stefanrichterhuber.wasmtimejavang.wasip1.WasiRights;
  * numbers, and filesystem access.
  */
 public class WasiPI1Context implements WasmContext {
+    private static final Logger LOGGER = LogManager.getLogger();
 
     /**
      * Module for all WASIPI1 imported functions
@@ -194,7 +198,8 @@ public class WasiPI1Context implements WasmContext {
                                 | WasiRights.FD_FILESTAT_SET_SIZE | WasiRights.FD_FILESTAT_SET_TIMES
                                 | WasiRights.FD_ADVISE | WasiRights.FD_ALLOCATE | WasiRights.FD_DATASYNC
                                 | WasiRights.FD_SYNC | WasiRights.FD_WRITE | WasiRights.FD_READ | WasiRights.FD_SEEK
-                                | WasiRights.FD_TELL,
+                                | WasiRights.FD_TELL | WasiRights.FD_FDSTAT_SET_FLAGS | WasiRights.POLL_FD_READWRITE
+                                | WasiRights.PATH_FILESTAT_SET_SIZE,
                         WasiRights.PATH_OPEN | WasiRights.FD_READDIR | WasiRights.PATH_READLINK
                                 | WasiRights.PATH_FILESTAT_GET | WasiRights.PATH_FILESTAT_SET_TIMES
                                 | WasiRights.PATH_CREATE_DIRECTORY | WasiRights.PATH_CREATE_FILE
@@ -205,7 +210,8 @@ public class WasiPI1Context implements WasmContext {
                                 | WasiRights.FD_FILESTAT_SET_SIZE | WasiRights.FD_FILESTAT_SET_TIMES
                                 | WasiRights.FD_ADVISE | WasiRights.FD_ALLOCATE | WasiRights.FD_DATASYNC
                                 | WasiRights.FD_SYNC | WasiRights.FD_WRITE | WasiRights.FD_READ | WasiRights.FD_SEEK
-                                | WasiRights.FD_TELL));
+                                | WasiRights.FD_TELL | WasiRights.FD_FDSTAT_SET_FLAGS | WasiRights.POLL_FD_READWRITE
+                                | WasiRights.PATH_FILESTAT_SET_SIZE));
             }
         }
     }
@@ -859,6 +865,7 @@ public class WasiPI1Context implements WasmContext {
      * @return An array of return values.
      */
     protected Object[] procExit(WasmtimeInstance instance, Object[] args) {
+        LOGGER.debug("Wasm program called proc_exit with status code {}", (int) args[0]);
         throw new ProcExitException((int) args[0]);
     }
 
@@ -1730,7 +1737,7 @@ public class WasiPI1Context implements WasmContext {
 
     @Override
     public String name() {
-        return "wasi_snapshot_preview1";
+        return WASI_SNAPSHOT_PREVIEW1_MODULE;
     }
 
 }
