@@ -211,17 +211,17 @@ public final class V128 extends Number implements Comparable<V128> {
 
     @Override
     public double doubleValue() {
-        return getBigInteger().doubleValue();
+        return (double) longValue();
     }
 
     @Override
     public float floatValue() {
-        return getBigInteger().floatValue();
+        return (float) longValue();
     }
 
     @Override
     public int intValue() {
-        return getBigInteger().intValue();
+        return (int) longValue();
     }
 
     @Override

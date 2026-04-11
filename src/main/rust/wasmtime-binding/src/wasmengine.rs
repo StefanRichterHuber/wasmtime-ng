@@ -1,4 +1,8 @@
-use jni::{bind_java_type, objects::{JClass, JPrimitiveArray}, sys::jlong};
+use jni::{
+    bind_java_type,
+    objects::{JClass, JPrimitiveArray},
+    sys::jlong,
+};
 use log::debug;
 use wasmtime::Engine;
 

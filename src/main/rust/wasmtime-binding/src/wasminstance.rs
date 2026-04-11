@@ -374,7 +374,13 @@ where
                 match global {
                     Ok(g) => {
                         debug!("Successfully unpacked ExternRef value");
-                        Some(unsafe { JObject::from_raw(env, g.value.as_obj().as_raw()) })
+                        match env.new_local_ref(&g.value) {
+                            Ok(local) => Some(local),
+                            Err(e) => {
+                                error!("Failed to create local ref from ExternRef: {}", e);
+                                None
+                            }
+                        }
                     }
                     Err(e) => {
                         error!("Failed to unpack ExternRef value: {}", e);

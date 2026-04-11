@@ -1,5 +1,10 @@
 use crate::{wasmengine::EngineHandle, wasmengine::JWasmtimeEngine};
-use jni::{bind_java_type, objects::{JClass, JMap}, refs::Global, sys::jlong};
+use jni::{
+    bind_java_type,
+    objects::{JClass, JMap},
+    refs::Global,
+    sys::jlong,
+};
 use log::debug;
 use std::cell::RefCell;
 use std::collections::HashMap;

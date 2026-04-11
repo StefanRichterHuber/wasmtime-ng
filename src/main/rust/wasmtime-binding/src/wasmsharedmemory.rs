@@ -1,5 +1,9 @@
 use crate::{wasmengine::EngineHandle, wasmexception::handle_wasmtime_error};
-use jni::{bind_java_type, objects::{JByteBuffer, JClass}, sys::jlong};
+use jni::{
+    bind_java_type,
+    objects::{JByteBuffer, JClass},
+    sys::jlong,
+};
 use log::debug;
 use wasmtime::{MemoryType, SharedMemory};
 
