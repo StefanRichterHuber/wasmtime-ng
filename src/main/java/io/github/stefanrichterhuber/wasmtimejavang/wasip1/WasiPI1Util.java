@@ -8,6 +8,13 @@ import java.util.concurrent.TimeUnit;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeMemory;
 
 public class WasiPI1Util {
+    /**
+     * Writes file status attributes to the specified memory location.
+     * 
+     * @param memory The WebAssembly memory to write to.
+     * @param ptr    The memory pointer where the filestat structure should be written.
+     * @param attrs  The basic file attributes to write.
+     */
     public static void writeFilestat(WasmtimeMemory memory, int ptr, BasicFileAttributes attrs) {
         memory.write(ptr, new byte[64]);
         memory.writeLong(ptr, attrs.fileKey() != null ? (long) attrs.fileKey().hashCode() : 0); // dev
@@ -21,13 +28,24 @@ public class WasiPI1Util {
         memory.writeLong(ptr + 56, attrs.creationTime().to(TimeUnit.NANOSECONDS));
     }
 
+    /**
+     * Reads data from an InputStream into WebAssembly memory based on an io-vector.
+     * 
+     * @param is        The InputStream to read from.
+     * @param memory    The WebAssembly memory to write the read data to.
+     * @param iovs_ptr  Pointer to the array of io-vectors.
+     * @param iovs_len  Number of elements in the io-vector array.
+     * @param nread_ptr Pointer to the location where the number of bytes read should be written.
+     * @return {@link WasiErrno#SUCCESS} if successful, or {@link WasiErrno#IO} on an IO error.
+     */
     public static int readFromInputStream(InputStream is, WasmtimeMemory memory, int iovs_ptr, int iovs_len,
             int nread_ptr) {
         try {
             int totalRead = 0;
             for (int i = 0; i < iovs_len; i++) {
-                int base = memory.readInt(iovs_ptr + (i * 8));
-                int len = memory.readInt(iovs_ptr + (i * 8) + 4);
+                int ptr = iovs_ptr + (i * 2 * Integer.BYTES);
+                int base = memory.readInt(ptr);
+                int len = memory.readInt(ptr + Integer.BYTES);
 
                 byte[] buf = new byte[len];
                 int n = is.read(buf);
@@ -45,15 +63,26 @@ public class WasiPI1Util {
         }
     }
 
+    /**
+     * Writes data from WebAssembly memory to an OutputStream based on an io-vector.
+     * 
+     * @param os           The OutputStream to write to.
+     * @param memory       The WebAssembly memory to read data from.
+     * @param iovs_ptr     Pointer to the array of io-vectors.
+     * @param iovs_len     Number of elements in the io-vector array.
+     * @param nwritten_ptr Pointer to the location where the number of bytes written should be written.
+     * @return {@link WasiErrno#SUCCESS} if successful, or {@link WasiErrno#IO} on an IO error.
+     */
     public static int writeToOutputStream(OutputStream os, WasmtimeMemory memory, int iovs_ptr, int iovs_len,
             int nwritten_ptr) {
         try {
             int totalWritten = 0;
             for (int i = 0; i < iovs_len; i++) {
-                int base = memory.readInt(iovs_ptr + (i * 8));
-                int len = memory.readInt(iovs_ptr + (i * 8) + 4);
+                final int ptr = iovs_ptr + (i * 2 * Integer.BYTES);
+                final int base = memory.readInt(ptr);
+                final int len = memory.readInt(ptr + Integer.BYTES);
 
-                byte[] buf = memory.read(base, len);
+                final byte[] buf = memory.read(base, len);
                 os.write(buf);
                 totalWritten += len;
             }
@@ -65,6 +94,15 @@ public class WasiPI1Util {
         }
     }
 
+    /**
+     * Sets the access and modification times for a file.
+     * 
+     * @param path      The path to the file.
+     * @param atim      The access time to set (in nanoseconds).
+     * @param mtim      The modification time to set (in nanoseconds).
+     * @param fst_flags Flags indicating which times to set and whether to use the current time.
+     * @return {@link WasiErrno#SUCCESS} if successful, or {@link WasiErrno#IO} on an IO error.
+     */
     public static int setFileTimes(java.nio.file.Path path, long atim, long mtim, int fst_flags) {
         try {
             if ((fst_flags & 1) != 0) { // ATIM

@@ -168,3 +168,61 @@ bind_java_type! {
         number: JNumber,
     },
 }
+
+bind_java_type! {
+    rust_type = pub JBigInteger,
+    java_type = "java.math.BigInteger",
+
+    type_map = {
+        JNumber =>  "java.lang.Number"
+    },
+
+    constructors {
+        fn new(value: JString),
+    },
+
+    methods {
+        static fn value_of(value: jlong) -> JBigInteger,
+        fn byte_value() -> jbyte,
+        fn short_value() -> jshort,
+        fn int_value() -> jint,
+        fn long_value() -> jlong,
+        fn float_value() -> jfloat,
+        fn double_value() -> jdouble,
+        fn compare_to(other: JBigInteger) -> jint,
+    },
+
+    is_instance_of = {
+        // With stem: generates as_number() method
+        number: JNumber,
+    },
+}
+
+bind_java_type! {
+    rust_type = pub JBigDecimal,
+    java_type = "java.math.BigDecimal",
+
+    type_map = {
+        JNumber =>  "java.lang.Number"
+    },
+
+    constructors {
+        fn new(value: JString),
+    },
+
+    methods {
+        static fn value_of(value: jdouble) -> JBigDecimal,
+        fn byte_value() -> jbyte,
+        fn short_value() -> jshort,
+        fn int_value() -> jint,
+        fn long_value() -> jlong,
+        fn float_value() -> jfloat,
+        fn double_value() -> jdouble,
+        fn compare_to(other: JBigDecimal) -> jint,
+    },
+
+    is_instance_of = {
+        // With stem: generates as_number() method
+        number: JNumber,
+    },
+}

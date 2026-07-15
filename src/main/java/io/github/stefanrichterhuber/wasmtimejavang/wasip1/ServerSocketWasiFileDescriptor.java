@@ -21,15 +21,6 @@ public class ServerSocketWasiFileDescriptor extends WasiFileDescriptor {
     }
 
     @Override
-    public int fd_fdstat_get(WasmtimeMemory memory, int ptr) {
-        memory.write(ptr, (byte) getType()); // fs_filetype
-        memory.writeShort(ptr + 2, (short) 0); // fs_flags
-        memory.writeLong(ptr + 8, rights_base); // fs_rights_base
-        memory.writeLong(ptr + 16, rights_inheriting); // fs_rights_inheriting
-        return WasiErrno.SUCCESS;
-    }
-
-    @Override
     public int sock_accept(int flags, int fd_ptr, WasmtimeMemory memory) {
         try {
             Socket client = serverSocket.accept();

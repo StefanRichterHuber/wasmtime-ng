@@ -18,15 +18,6 @@ public final class DirectoryWasiFileDescriptor extends WasiFileDescriptor {
     }
 
     @Override
-    public int fd_fdstat_get(WasmtimeMemory memory, int ptr) {
-        memory.write(ptr, new byte[24]);
-        memory.write(ptr, (byte) WasiFileType.DIRECTORY);
-        memory.writeLong(ptr + 8, rights_base);
-        memory.writeLong(ptr + 16, rights_inheriting);
-        return WasiErrno.SUCCESS;
-    }
-
-    @Override
     public int fd_filestat_get(WasmtimeMemory memory, int ptr) {
         try {
             BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class);

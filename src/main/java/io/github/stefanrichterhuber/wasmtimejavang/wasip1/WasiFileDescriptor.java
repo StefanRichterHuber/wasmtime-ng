@@ -50,7 +50,14 @@ public abstract class WasiFileDescriptor implements AutoCloseable {
      * Implementation of fd_fdstat_get.
      * Writes the fdstat structure to the specified memory pointer.
      */
-    public abstract int fd_fdstat_get(WasmtimeMemory memory, int ptr);
+    public int fd_fdstat_get(WasmtimeMemory memory, int ptr) {
+        memory.write(ptr, new byte[24]);
+        memory.write(ptr, (byte) getType());
+        memory.writeShort(ptr + 2, (short) getFdFlags());
+        memory.writeLong(ptr + 8, rights_base);
+        memory.writeLong(ptr + 16, rights_inheriting);
+        return WasiErrno.SUCCESS;
+    }
 
     /**
      * Implementation of fd_fdstat_set_flags.
@@ -199,5 +206,14 @@ public abstract class WasiFileDescriptor implements AutoCloseable {
      */
     public Path getPath() {
         return null;
+    }
+
+    /**
+     * Returns the flags for the file
+     * 
+     * @return
+     */
+    public short getFdFlags() {
+        return 0;
     }
 }

@@ -22,16 +22,6 @@ public final class FileWasiFileDescriptor extends WasiFileDescriptor {
     }
 
     @Override
-    public int fd_fdstat_get(WasmtimeMemory memory, int ptr) {
-        memory.write(ptr, new byte[24]);
-        memory.write(ptr, (byte) WasiFileType.REGULAR_FILE);
-        memory.writeShort(ptr + 2, (short) fd_flags);
-        memory.writeLong(ptr + 8, rights_base);
-        memory.writeLong(ptr + 16, rights_inheriting);
-        return WasiErrno.SUCCESS;
-    }
-
-    @Override
     public int fd_read(WasmtimeMemory memory, int iovs_ptr, int iovs_len, int nread_ptr) {
         if ((rights_base & WasiRights.FD_READ) == 0)
             return WasiErrno.NOTCAPABLE;
@@ -244,5 +234,10 @@ public final class FileWasiFileDescriptor extends WasiFileDescriptor {
     @Override
     public Path getPath() {
         return path;
+    }
+
+    @Override
+    public short getFdFlags() {
+        return (short) fd_flags;
     }
 }
