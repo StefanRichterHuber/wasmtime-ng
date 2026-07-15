@@ -14,9 +14,9 @@ name = "wasmtimebinding"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasmtime = { version = "42" }
+wasmtime = { version = "46.0.1" }
 jni = { version = "0.22" }
-log = { version = "0.4", features = ["std"] }
+log = { version = "0.4.33", features = ["std"] }
 
 [dev-dependencies]
 # Invocation feature is necessary for tests to spin up a VM

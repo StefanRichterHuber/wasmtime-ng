@@ -56,6 +56,7 @@ Include the dependency into your project `pom.xml` (the published artifact conta
 </dependency>
 ```
 
+
 ### Function Imports
 
 You can import Java methods into the WebAssembly context, allowing WASM modules to invoke native Java code.
@@ -234,6 +235,8 @@ The project is structured into three distinct layers:
 1. **Java API**: A type-safe wrapper that represents Wasmtime concepts (Engine, Module, Store, Instance) in Java. It uses `jar-jni` for automatic native library loading. Log4j2 is used as logging framework.
 2. **JNI Layer (Rust)**: Built using the [jni-rs](https://crates.io/crates/jni) crate. It manages the lifecycle of native Wasmtime objects and facilitates data exchange between the JVM and Rust. This layer also redirects Rust `log` crate output to Java's Log4j2. "Classic" Java JNI was preferred over the newer "Foreign Function and Memory API", due to the native library is only planned to be used with Java so it could be tailored to its use. This allows more direct Rust - Java interactions like easily calling Java methods on objects or even create new Java objects using their constructor. A "Foreign Function an Memory API" approach would have resulted in a thinner native layer with far higher implementation effort on the Java side for all the type conversion, especially sacrificing the type and lifetime safety the current rust layer provides for the runtime.
 3. **Wasmtime Core**: The underlying [wasmtime](https://crates.io/crates/wasmtime) Rust crate.
+
+All modules are tested using JUnit. Test coverage is measured with Jacoco. The neccessary wasm modules for testing are build with rust (see `src/test/rust`). Using `exec-maven-plugin` these wasm modules are build in the `generate-test-resources` phase.
 
 ## Comparison to Previous Work
 
