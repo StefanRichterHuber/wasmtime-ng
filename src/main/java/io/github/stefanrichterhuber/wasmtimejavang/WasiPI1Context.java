@@ -217,6 +217,16 @@ public class WasiPI1Context implements WasmContext {
     }
 
     /**
+     * Returns the standard charset used for reading and writing strings in WASM
+     * memory. see {@link #STD_CHARSET}
+     * 
+     * @return The standard charset.
+     */
+    protected Charset getStdCharset() {
+        return STD_CHARSET;
+    }
+
+    /**
      * Maps a host directory to a client-visible path.
      *
      * @param host   The host Path.
@@ -745,7 +755,7 @@ public class WasiPI1Context implements WasmContext {
                 memory.writeInt(current_argv_ptr, current_argv_buf_ptr);
 
                 // Write the argument string
-                final int len = memory.writeCString(current_argv_buf_ptr, arg, STD_CHARSET);
+                final int len = memory.writeCString(current_argv_buf_ptr, arg, getStdCharset());
                 current_argv_buf_ptr += len;
                 current_argv_ptr += 4;
             }
@@ -769,8 +779,8 @@ public class WasiPI1Context implements WasmContext {
             final int count = this.args.size();
             int buf_size = 0;
             for (String arg : this.args) {
-                buf_size += arg.getBytes(STD_CHARSET).length + 1; // +1 for null
-                                                                  // terminator
+                buf_size += arg.getBytes(getStdCharset()).length + 1; // +1 for null
+                // terminator
             }
 
             memory.writeInt(count_ptr, count);
@@ -802,7 +812,7 @@ public class WasiPI1Context implements WasmContext {
                 // Write the environment variable string
                 final String s = entry.getKey() + "=" + entry.getValue();
 
-                final int len = memory.writeCString(current_environ_buf_ptr, s, STD_CHARSET);
+                final int len = memory.writeCString(current_environ_buf_ptr, s, getStdCharset());
                 current_environ_buf_ptr += len;
                 current_environ_ptr += 4;
             }
@@ -827,7 +837,7 @@ public class WasiPI1Context implements WasmContext {
             int buf_size = 0;
             for (Map.Entry<String, String> entry : env.entrySet()) {
                 String s = entry.getKey() + "=" + entry.getValue();
-                buf_size += s.getBytes(STD_CHARSET).length + 1; // +1 for null terminator
+                buf_size += s.getBytes(getStdCharset()).length + 1; // +1 for null terminator
             }
 
             memory.writeInt(count_ptr, count);
@@ -1103,7 +1113,7 @@ public class WasiPI1Context implements WasmContext {
 
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
         if (memory != null) {
-            byte[] bytes = clientPath.getBytes(STD_CHARSET);
+            byte[] bytes = clientPath.getBytes(getStdCharset());
             memory.write(path_ptr, java.util.Arrays.copyOf(bytes, Math.min(bytes.length, path_len)));
         }
         return new Object[] { WasiErrno.SUCCESS };
@@ -1141,7 +1151,7 @@ public class WasiPI1Context implements WasmContext {
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
         if (memory != null) {
             memory.write(ptr, (byte) 0); // pr_type = prestat_dir (0)
-            memory.writeInt(ptr + 4, clientPath.getBytes(STD_CHARSET).length);
+            memory.writeInt(ptr + 4, clientPath.getBytes(getStdCharset()).length);
         }
         return new Object[] { WasiErrno.SUCCESS };
     }
@@ -1281,7 +1291,7 @@ public class WasiPI1Context implements WasmContext {
         final int path_ptr = (int) args[1];
         final int path_len = (int) args[2];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
-        final String pathStr = memory.readString(path_ptr, path_len, STD_CHARSET);
+        final String pathStr = memory.readString(path_ptr, path_len, getStdCharset());
         final Path path = resolvePath(fd, pathStr);
         if (path == null)
             return new Object[] { WasiErrno.BADF };
@@ -1308,7 +1318,7 @@ public class WasiPI1Context implements WasmContext {
         final int path_len = (int) args[3];
         final int ptr = (int) args[4];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
-        final String pathStr = memory.readString(path_ptr, path_len, STD_CHARSET);
+        final String pathStr = memory.readString(path_ptr, path_len, getStdCharset());
         final Path path = resolvePath(fd, pathStr);
         if (path == null)
             return new Object[] { WasiErrno.BADF };
@@ -1341,7 +1351,7 @@ public class WasiPI1Context implements WasmContext {
         final long mtim = (long) args[5];
         final int fst_flags = (int) args[6];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
-        final String pathStr = memory.readString(path_ptr, path_len, STD_CHARSET);
+        final String pathStr = memory.readString(path_ptr, path_len, getStdCharset());
         final Path path = resolvePath(fd, pathStr);
         if (path == null)
             return new Object[] { WasiErrno.BADF };
@@ -1367,9 +1377,9 @@ public class WasiPI1Context implements WasmContext {
         final int new_path_len = (int) args[6];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
         final String oldPathStr = memory.readString(old_path_ptr, old_path_len,
-                STD_CHARSET);
+                getStdCharset());
         final String newPathStr = memory.readString(new_path_ptr, new_path_len,
-                STD_CHARSET);
+                getStdCharset());
         final Path oldPath = resolvePath(old_fd, oldPathStr);
         final Path newPath = resolvePath(new_fd, newPathStr);
         if (oldPath == null || newPath == null)
@@ -1403,7 +1413,7 @@ public class WasiPI1Context implements WasmContext {
         final int opened_fd_ptr = (int) args[8];
 
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
-        final String pathStr = memory.readString(path_ptr, path_len, STD_CHARSET);
+        final String pathStr = memory.readString(path_ptr, path_len, getStdCharset());
         final Path path = resolvePath(fd, pathStr);
         if (path == null)
             return new Object[] { WasiErrno.BADF };
@@ -1468,13 +1478,13 @@ public class WasiPI1Context implements WasmContext {
         final int buf_len = (int) args[4];
         final int nread_ptr = (int) args[5];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
-        final String pathStr = memory.readString(path_ptr, path_len, STD_CHARSET);
+        final String pathStr = memory.readString(path_ptr, path_len, getStdCharset());
         final Path path = resolvePath(fd, pathStr);
         if (path == null)
             return new Object[] { WasiErrno.BADF };
         try {
             final Path target = Files.readSymbolicLink(path);
-            final byte[] bytes = target.toString().getBytes(STD_CHARSET);
+            final byte[] bytes = target.toString().getBytes(getStdCharset());
             final int toWrite = Math.min(bytes.length, buf_len);
             memory.write(buf_ptr, java.util.Arrays.copyOf(bytes, toWrite));
             memory.writeInt(nread_ptr, toWrite);
@@ -1497,7 +1507,7 @@ public class WasiPI1Context implements WasmContext {
         final int path_ptr = (int) args[1];
         final int path_len = (int) args[2];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
-        final String pathStr = memory.readString(path_ptr, path_len, STD_CHARSET);
+        final String pathStr = memory.readString(path_ptr, path_len, getStdCharset());
         final Path path = resolvePath(fd, pathStr);
         if (path == null)
             return new Object[] { WasiErrno.BADF };
@@ -1528,9 +1538,9 @@ public class WasiPI1Context implements WasmContext {
         final int new_path_len = (int) args[5];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
         final String oldPathStr = memory.readString(old_path_ptr, old_path_len,
-                STD_CHARSET);
+                getStdCharset());
         final String newPathStr = memory.readString(new_path_ptr, new_path_len,
-                STD_CHARSET);
+                getStdCharset());
         final Path oldPath = resolvePath(old_fd, oldPathStr);
         final Path newPath = resolvePath(new_fd, newPathStr);
         if (oldPath == null || newPath == null)
@@ -1559,9 +1569,9 @@ public class WasiPI1Context implements WasmContext {
         final int new_path_len = (int) args[4];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
         final String oldPathStr = memory.readString(old_path_ptr, old_path_len,
-                STD_CHARSET);
+                getStdCharset());
         final String newPathStr = memory.readString(new_path_ptr, new_path_len,
-                STD_CHARSET);
+                getStdCharset());
         final Path oldPath = Paths.get(oldPathStr);
         final Path newPath = resolvePath(fd, newPathStr);
         if (newPath == null)
@@ -1587,7 +1597,7 @@ public class WasiPI1Context implements WasmContext {
         final int path_ptr = (int) args[1];
         final int path_len = (int) args[2];
         final WasmtimeMemory memory = instance.getMemory(STD_MEMORY);
-        final String pathStr = memory.readString(path_ptr, path_len, STD_CHARSET);
+        final String pathStr = memory.readString(path_ptr, path_len, getStdCharset());
         final Path path = resolvePath(fd, pathStr);
         if (path == null)
             return new Object[] { WasiErrno.BADF };
