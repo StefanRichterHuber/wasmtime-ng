@@ -1,6 +1,26 @@
 use jni::bind_java_type;
 
 bind_java_type! {
+    rust_type = pub JBoolean,
+    java_type = "java.lang.Boolean",
+
+    methods {
+        static fn value_of(value: jboolean) -> JBoolean,
+        fn boolean_value() -> jboolean,
+    },
+}
+
+bind_java_type! {
+    rust_type = pub JCharacter,
+    java_type = "java.lang.Character",
+
+    methods {
+        static fn value_of(value: jchar) -> JCharacter,
+        fn char_value() -> jchar,
+    },
+}
+
+bind_java_type! {
     rust_type = pub JNumber,
     java_type = "java.lang.Number",
 
