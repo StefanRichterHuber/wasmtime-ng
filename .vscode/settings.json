@@ -2,9 +2,18 @@
     "java.configuration.updateBuildConfiguration": "automatic",
     "rust-analyzer.linkedProjects": [
         "./src/main/rust/wasmtime-binding/Cargo.toml",
-        "./src/test/rust/wasip1sockettest/Cargo.toml",
         "./src/test/rust/wasip1test/Cargo.toml",
+        "./src/test/rust/valuetest/Cargo.toml",
         "./src/test/rust/wasip1filetest/Cargo.toml",
+        "./src/test/rust/wasip1sockettest/Cargo.toml",
+        "./src/test/rust/wasip1threadtest/Cargo.toml",
+        "./src/test/rust/wasip1vfstest/Cargo.toml",
+        "./src/test/rust/wasip2customtest/Cargo.toml",
+        "./src/test/rust/wasip2clitest/Cargo.toml",
+        "./src/test/rust/wasip2filetest/Cargo.toml",
+        "./src/test/rust/wasip2randomtest/Cargo.toml",
+        "./src/test/rust/wasip2sockettest/Cargo.toml",
+        "./src/test/rust/wasip2test/Cargo.toml",
         "./src/test/rust/wasip1threadtest/Cargo.toml"
     ]
 }
