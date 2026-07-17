@@ -1,5 +1,9 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -18,6 +22,7 @@ public class WasmtimeWasiThreadsTest {
      */
     @Test
     public void testWasiThreads() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
         // Path should be where Maven build puts it
         Path wasmPath = Paths
                 .get("target/rust-test/wasip1threadtest/wasm32-wasip1-threads/debug/wasip1threadtest.wasm");
@@ -32,7 +37,7 @@ public class WasmtimeWasiThreadsTest {
 
             WasiPI1Context wasiContext = new WasiPI1Context()
                     .withArguments(List.of("wasip1threadtest"))
-                    .withStdOut(new LoggerOutputStream("WasmtimeWasiThreadsTest", Level.INFO))
+                    .withStdOut(bos)
                     .withStdErr(new LoggerOutputStream("WasmtimeWasiThreadsTest", Level.ERROR));
 
             WasiThreadContext threadContext = new WasiThreadContext();
@@ -42,6 +47,22 @@ public class WasmtimeWasiThreadsTest {
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
                 instance.start();
             }
+
+            /*
+             * 
+             * 10:18:27.629 [pool-2-thread-1] INFO WasmtimeWasiThreadsTest - WASM: Hello
+             * from thread ThreadId(2), arg: Greeting from main to thread
+             * 10:18:27.635 [pool-2-thread-1] INFO WasmtimeWasiThreadsTest - WASM: Hello
+             * from thread ThreadId(3), arg: Greeting from main to thread
+             * 10:18:27.640 [pool-2-thread-1] INFO WasmtimeWasiThreadsTest - WASM: Hello
+             * from thread ThreadId(4), arg: Greeting from main to thread
+             * 
+             */
+
+            String content = bos.toString();
+            assertTrue(content.contains("Hello from thread ThreadId(2), arg: Greeting from main to thread"));
+            assertTrue(content.contains("Hello from thread ThreadId(3), arg: Greeting from main to thread"));
+            assertTrue(content.contains("Hello from thread ThreadId(4), arg: Greeting from main to thread"));
 
         }
     }
@@ -53,6 +74,8 @@ public class WasmtimeWasiThreadsTest {
      */
     @Test
     public void testWasiThreadsWithExecutor() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+
         // Path should be where Maven build puts it
         Path wasmPath = Paths
                 .get("target/rust-test/wasip1threadtest/wasm32-wasip1-threads/debug/wasip1threadtest.wasm");
@@ -67,7 +90,7 @@ public class WasmtimeWasiThreadsTest {
 
             WasiPI1Context wasiContext = new WasiPI1Context()
                     .withArguments(List.of("wasip1threadtest"))
-                    .withStdOut(new LoggerOutputStream("WasmtimeWasiThreadsTest", Level.INFO))
+                    .withStdOut(bos)
                     .withStdErr(new LoggerOutputStream("WasmtimeWasiThreadsTest", Level.ERROR));
 
             WasiThreadContext threadContext = new WasiThreadContext(Executors.newSingleThreadExecutor());
@@ -79,6 +102,10 @@ public class WasmtimeWasiThreadsTest {
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
                 instance.start();
             }
+            String content = bos.toString();
+            assertTrue(content.contains("Hello from thread ThreadId(2), arg: Greeting from main to thread"));
+            assertTrue(content.contains("Hello from thread ThreadId(3), arg: Greeting from main to thread"));
+            assertTrue(content.contains("Hello from thread ThreadId(4), arg: Greeting from main to thread"));
 
         }
     }

@@ -48,7 +48,6 @@ public class WasmtimeWasiVFSTest {
             }
 
             String output = baos.toString();
-            System.out.println(output);
 
             // Verify the output contains messages about failing to open host files
             assertTrue(output.contains("Correctly failed to open '/etc/passwd'"), "Should fail to open /etc/passwd");
