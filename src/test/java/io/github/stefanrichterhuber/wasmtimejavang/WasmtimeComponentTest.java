@@ -7,9 +7,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext.ComponentImportFunction;
-import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext.ComponentImportResource;
-
 /**
  * Milestone A verification: proves the generic Component Model plumbing
  * (WasmtimeComponent / WasmtimeComponentLinker / WasmtimeComponentInstance
