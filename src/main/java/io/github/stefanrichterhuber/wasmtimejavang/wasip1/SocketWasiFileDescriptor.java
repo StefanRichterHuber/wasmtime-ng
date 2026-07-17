@@ -9,7 +9,7 @@ import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeMemory;
 /**
  * A WASI file descriptor representing a network socket.
  */
-public class SocketWasiFileDescriptor extends WasiFileDescriptor {
+public final class SocketWasiFileDescriptor extends WasiFileDescriptor {
     private final Socket socket;
     private final InputStream is;
     private final OutputStream os;

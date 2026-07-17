@@ -63,9 +63,6 @@ public class ServiceLoaderComponentContextLookup implements ComponentContextLook
         }
         String name = parts[0];
         SemanticVersion version = SemanticVersion.parse(parts[1]);
-        if (version == null) {
-            return Optional.empty();
-        }
 
         for (WasmComponentContext context : ServiceLoader.load(WasmComponentContext.class)) {
             if (context.getProvidedInterfaces().contains(name)) {

@@ -18,6 +18,10 @@ public interface WasmContext {
      */
     public record ImportFunction(String module, String name, List<ValType> parameters, List<ValType> returnTypes,
             WasmtimeFunction function) {
+        public ImportFunction {
+            parameters = List.copyOf(parameters);
+            returnTypes = List.copyOf(returnTypes);
+        }
     }
 
     /**
