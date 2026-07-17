@@ -2,3 +2,5 @@ io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiIoContext
 io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiClocksContext
 io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiCliContext
 io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiRandomContext
+io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiFilesystemContext
+io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiSocketsContext

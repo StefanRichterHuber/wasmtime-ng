@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import io.github.stefanrichterhuber.wasmtimejavang.internal.PathSandbox;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.DirectoryWasiFileDescriptor;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.FileWasiFileDescriptor;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.NoOpInputStream;
@@ -156,22 +157,7 @@ public class WasiPI1Context implements WasmContext {
         WasiFileDescriptor wfd = fds.get(fd);
         if (wfd == null)
             return null;
-        Path base = wfd.getPath();
-        if (base == null)
-            return null;
-        if (path.isEmpty() || path.equals("."))
-            return base;
-
-        // Ensure the path is resolved and normalized within the base directory to
-        // prevent path traversal
-        Path resolved = base.resolve(path).normalize().toAbsolutePath();
-        Path absoluteBase = base.normalize().toAbsolutePath();
-
-        if (resolved.startsWith(absoluteBase)) {
-            return resolved;
-        } else {
-            return null;
-        }
+        return PathSandbox.resolve(wfd.getPath(), path);
     }
 
     /**

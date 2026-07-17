@@ -35,15 +35,23 @@ import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
  * can depend on {@code "wasi-io"} and share them rather than keeping separate
  * tables.
  * <br>
- * {@code input-stream} reading only implements
- * {@code [method]input-stream.blocking-read}
- * (what Rust's {@code std::io::Read} for wasm32-wasip2 actually calls) and
- * {@code [method]input-stream.subscribe}, not the non-blocking {@code read}
- * or {@code skip}/{@code blocking-skip} -- both would need genuinely
- * non-blocking I/O against an arbitrary Java {@link InputStream} to implement
- * meaningfully, which this doesn't attempt. Reads also collapse every error
- * (including a real {@link IOException}, not just end-of-stream) to the WIT
- * {@code stream-error.closed} case rather than {@code last-operation-failed},
+ * {@code input-stream} reading implements both
+ * {@code [method]input-stream.blocking-read} (what Rust's {@code std::io::Read}
+ * calls for e.g. {@code wasi:cli/stdin}) and the non-blocking
+ * {@code [method]input-stream.read} (what {@code std::net::TcpStream}'s read
+ * loop calls instead, paired with {@code subscribe}/{@code poll}) -- but not
+ * {@code skip}/{@code blocking-skip}, which nothing in this library's test
+ * fixtures needs. The non-blocking variant is approximated via
+ * {@link InputStream#available()} (accurate enough for a socket's
+ * {@link InputStream}, the main consumer) rather than true non-blocking I/O,
+ * which an arbitrary Java {@link InputStream} can't generally provide; since
+ * every {@code subscribe()}-produced pollable here is always "ready" (see
+ * {@link #inputStreamSubscribe}), a guest polling in a loop while genuinely
+ * waiting on a slow peer ends up busy-retrying -- {@link #inputStreamRead}
+ * sleeps briefly on each empty result specifically to bound that to a few
+ * hundred retries/second rather than a hot spin. Reads also collapse every
+ * error (including a real {@link IOException}, not just end-of-stream) to the
+ * WIT {@code stream-error.closed} case rather than {@code last-operation-failed},
  * since that would require constructing an actual {@code error} resource.
  */
 public class WasiIoContext implements WasmComponentContext, WasiIoResources {
@@ -140,8 +148,10 @@ public class WasiIoContext implements WasmComponentContext, WasiIoResources {
     public List<ComponentImportFunction> getImportFunctions() {
         List<ComponentImportFunction> result = new ArrayList<>();
         result.add(func(WASI_IO_POLL + "@" + version, "[method]pollable.block", this::pollableBlock));
+        result.add(func(WASI_IO_POLL + "@" + version, "poll", this::poll));
         result.add(func(WASI_IO_STREAMS + "@" + version, "[method]input-stream.blocking-read",
                 this::inputStreamBlockingRead));
+        result.add(func(WASI_IO_STREAMS + "@" + version, "[method]input-stream.read", this::inputStreamRead));
         result.add(func(WASI_IO_STREAMS + "@" + version, "[method]input-stream.subscribe", this::inputStreamSubscribe));
         result.add(func(WASI_IO_STREAMS + "@" + version, "[method]output-stream.check-write",
                 this::outputStreamCheckWrite));
@@ -200,6 +210,43 @@ public class WasiIoContext implements WasmComponentContext, WasiIoResources {
             }
         }
         return new Object[0];
+    }
+
+    /**
+     * Implementation of the free {@code poll} function: waits until at least
+     * one of the given pollables is ready, then returns the indices (into
+     * {@code in}) of every pollable that's ready. Since every pollable this
+     * context hands out is either {@link #ALWAYS_READY} or backed by a real
+     * {@code monotonic-clock} deadline, this only ever actually waits when
+     * every given pollable has a future deadline -- rechecking periodically
+     * so a newly-elapsed deadline is noticed promptly.
+     */
+    protected Object[] poll(WasmtimeComponentInstance instance, Object[] args) {
+        @SuppressWarnings("unchecked")
+        List<Object> in = (List<Object>) args[0];
+        while (true) {
+            List<Object> ready = new ArrayList<>();
+            long earliestDeadline = Long.MAX_VALUE;
+            for (int i = 0; i < in.size(); i++) {
+                WitResource pollable = (WitResource) in.get(i);
+                Long deadline = pollables.get(pollable.rep());
+                if (deadline == null || deadline == ALWAYS_READY || deadline <= System.nanoTime()) {
+                    ready.add(i);
+                } else {
+                    earliestDeadline = Math.min(earliestDeadline, deadline);
+                }
+            }
+            if (!ready.isEmpty()) {
+                return new Object[] { ready };
+            }
+            long remainingNanos = earliestDeadline - System.nanoTime();
+            try {
+                Thread.sleep(Math.max(1, Math.min(remainingNanos / 1_000_000L, 50)));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return new Object[] { ready };
+            }
+        }
     }
 
     protected Object[] outputStreamCheckWrite(WasmtimeComponentInstance instance, Object[] args) {
@@ -278,6 +325,44 @@ public class WasiIoContext implements WasmComponentContext, WasiIoResources {
         int toRead = (int) Math.min(len, MAX_READ_CHUNK);
         byte[] buffer = new byte[toRead];
         try {
+            int n = in.read(buffer);
+            if (n < 0) {
+                return new Object[] { WitResult.err(new WitVariant("closed", null)) };
+            }
+            byte[] read = (n == buffer.length) ? buffer : Arrays.copyOf(buffer, n);
+            return new Object[] { WitResult.ok(read) };
+        } catch (IOException e) {
+            return new Object[] { WitResult.err(new WitVariant("closed", null)) };
+        }
+    }
+
+    /**
+     * Implementation of the non-blocking {@code [method]input-stream.read}:
+     * returns whatever's immediately available (possibly an empty list, if
+     * nothing has arrived yet but the stream isn't closed) rather than
+     * blocking for at least one byte. See the class javadoc for the
+     * {@link InputStream#available()}-based approximation and the busy-retry
+     * mitigation below.
+     */
+    protected Object[] inputStreamRead(WasmtimeComponentInstance instance, Object[] args) {
+        WitResource self = (WitResource) args[0];
+        long len = (Long) args[1];
+        InputStream in = inputStreams.get(self.rep());
+        if (in == null) {
+            return new Object[] { WitResult.err(new WitVariant("closed", null)) };
+        }
+        try {
+            int available = in.available();
+            if (available <= 0) {
+                try {
+                    Thread.sleep(2);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return new Object[] { WitResult.ok(new byte[0]) };
+            }
+            int toRead = (int) Math.min(len, Math.min(available, MAX_READ_CHUNK));
+            byte[] buffer = new byte[toRead];
             int n = in.read(buffer);
             if (n < 0) {
                 return new Object[] { WitResult.err(new WitVariant("closed", null)) };

@@ -262,16 +262,42 @@ try (
 
 ### Supported WASI Preview 2 interfaces
 
-Each interface group lives in its own `WasmComponentContext` implementation under the `wasip2` package, and all four are auto-discovered by `linkRequired(...)` with zero configuration.
+Each interface group lives in its own `WasmComponentContext` implementation under the `wasip2` package, and all six are auto-discovered by `linkRequired(...)` with zero configuration.
 
 | Interfaces | Class | Status | Configuration |
 | :--- | :--- | :---: | :--- |
 | `wasi:cli/environment,exit,stdin,stdout,stderr,terminal-*` | `WasiCliContext` | ✅ | `withEnvs(Map)`, `withArguments(List)`, `withStdIn/StdOut/StdErr(...)`. `terminal-*` always reports "not a tty" |
 | `wasi:clocks/monotonic-clock,wall-clock` | `WasiClocksContext` | ✅ | none (uses `System.nanoTime()`/`System.currentTimeMillis()`) |
 | `wasi:random/random,insecure,insecure-seed` | `WasiRandomContext` | ✅ | `withSecureRandom(Random)`, `withRandom(Random)` (the insecure generator) |
-| `wasi:io/poll,streams,error` | `WasiIoContext` | 🟡 | Owns the shared stream/pollable tables other contexts (`WasiCliContext`, `WasiClocksContext`) depend on. Only blocking reads/writes are implemented (`[method]input-stream.blocking-read`, no non-blocking `read`/`skip`) |
-| `wasi:filesystem/*` | — | ❌ | Not yet implemented |
-| `wasi:sockets/*` | — | ❌ | Not yet implemented |
+| `wasi:io/poll,streams,error` | `WasiIoContext` | 🟡 | Owns the shared stream/pollable tables other contexts (`WasiCliContext`, `WasiClocksContext`, `WasiFilesystemContext`, `WasiSocketsContext`) depend on. Both blocking and non-blocking reads are implemented (`[method]input-stream.blocking-read` and `.read`, plus the batch `poll` function), but not `skip`/`blocking-skip` |
+| `wasi:filesystem/types,preopens` | `WasiFilesystemContext` | 🟡 | `withDirectory(Path host, String client)` (repeatable). No symlink support (`symlink-at`/`readlink-at` not implemented, `path-flags.symlink-follow` ignored — host paths always resolve following symlinks) |
+| `wasi:sockets/network,instance-network,tcp(-create-socket),udp(-create-socket),ip-name-lookup` | `WasiSocketsContext` | 🟡 | None — a guest creates/binds/connects/listens its own sockets, same as on a real host. IPv4 only (`ipv6` rejected as `not-supported`). Some options `java.net` has no equivalent for (TCP `hop-limit`, TCP keep-alive idle-time/interval/count, UDP `unicast-hop-limit`) are stored and returned as configured but not actually applied to the OS socket |
+
+`WasiFilesystemContext` mirrors WASI Preview 1's filesystem support (`WasiPI1Context` + `withDirectory`): preopened host directories are exposed as `descriptor` resources sandboxed the same way -- a guest path can never resolve outside its preopened directory, no matter how many `..` segments it contains. Reads/writes go through `wasi:io/streams` the same way `wasi:cli/stdout` does: `[method]descriptor.read-via-stream`/`write-via-stream`/`append-via-stream` hand out `input-stream`/`output-stream` resources from the shared `wasi-io` table (so it depends on `"wasi-io"` the same way `WasiCliContext` and `WasiClocksContext` do), rather than reading/writing bytes directly.
+
+```java
+try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix().toBuilder()
+        .setAttributeViews("basic", "owner", "posix", "unix").build())) {
+    Path root = fs.getPath("/");
+    Files.writeString(root.resolve("input.txt"), "Data for WASM");
+
+    linker.linkContext(new WasiCliContext().withStdOut(System.out));
+    linker.linkContext(new WasiFilesystemContext().withDirectory(root, ".")); // preopen "." -> root
+    linker.linkRequired(component);
+
+    try (WasmtimeComponentInstance instance = new WasmtimeComponentInstance(store, component, linker)) {
+        instance.asCliRunnable().call();
+    }
+}
+```
+
+Unlike `WasiFilesystemContext`, `WasiSocketsContext` needs no configuration at all: WASI Preview 2 gives a guest full control over its own sockets (create, bind, connect/listen, accept, send/receive), so there's no host-side preopen step to wire up -- linking it is enough, and a guest creating a TCP or UDP socket behaves exactly as it would talking to a real OS network stack (loopback and outbound connections both work). The two-phase `start-x`/`finish-x` operations WASI defines for non-blocking bind/connect/listen are collapsed into one blocking `java.net` call apiece internally, since every host call in this bridge is already synchronous from the guest's perspective.
+
+```java
+linker.linkContext(new WasiCliContext().withStdOut(System.out));
+linker.linkContext(new WasiSocketsContext());
+linker.linkRequired(component); // pulls in wasi-io, wasi-clocks, etc. as needed
+```
 
 ### Implementing your own component context
 

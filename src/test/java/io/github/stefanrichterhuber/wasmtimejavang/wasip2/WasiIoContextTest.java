@@ -94,7 +94,9 @@ public class WasiIoContextTest {
         List<ComponentImportFunction> functions = io.getImportFunctions();
         List<String> names = functions.stream().map(ComponentImportFunction::funcName).toList();
         assertTrue(names.contains("[method]pollable.block"));
+        assertTrue(names.contains("poll"));
         assertTrue(names.contains("[method]input-stream.blocking-read"));
+        assertTrue(names.contains("[method]input-stream.read"));
         assertTrue(names.contains("[method]input-stream.subscribe"));
         assertTrue(names.contains("[method]output-stream.check-write"));
         assertTrue(names.contains("[method]output-stream.write"));
@@ -373,6 +375,164 @@ public class WasiIoContextTest {
         WitResult wr = (WitResult) result[0];
         assertFalse(wr.ok());
         assertEquals(new WitVariant("closed", null), wr.value());
+    }
+
+    private static final class NeverAvailableInputStream extends InputStream {
+        @Override
+        public int available() {
+            return 0;
+        }
+
+        @Override
+        public int read() throws IOException {
+            throw new IOException("read() should not be called while available() == 0");
+        }
+    }
+
+    @Test
+    public void inputStreamReadReturnsAvailableBytesWithoutBlocking() throws Exception {
+        WasiIoContext io = new WasiIoContext();
+        byte[] content = "hello".getBytes();
+        int rep = io.registerInputStream(new ByteArrayInputStream(content));
+
+        Object[] result = io.inputStreamRead(null, new Object[] { resourceOf(rep), 100L });
+        WitResult wr = (WitResult) result[0];
+        assertTrue(wr.ok());
+        assertArrayEquals(content, (byte[]) wr.value());
+    }
+
+    @Test
+    public void inputStreamReadRespectsRequestedLength() throws Exception {
+        WasiIoContext io = new WasiIoContext();
+        byte[] content = "hello world".getBytes();
+        int rep = io.registerInputStream(new ByteArrayInputStream(content));
+
+        Object[] result = io.inputStreamRead(null, new Object[] { resourceOf(rep), 5L });
+        WitResult wr = (WitResult) result[0];
+        assertTrue(wr.ok());
+        assertArrayEquals(new byte[] { 'h', 'e', 'l', 'l', 'o' }, (byte[]) wr.value());
+    }
+
+    @Test
+    public void inputStreamReadReturnsEmptyWithoutBlockingWhenNothingAvailable() {
+        WasiIoContext io = new WasiIoContext();
+        int rep = io.registerInputStream(new NeverAvailableInputStream());
+
+        long start = System.nanoTime();
+        Object[] result = io.inputStreamRead(null, new Object[] { resourceOf(rep), 10L });
+        long elapsedMillis = (System.nanoTime() - start) / 1_000_000L;
+
+        WitResult wr = (WitResult) result[0];
+        assertTrue(wr.ok());
+        assertEquals(0, ((byte[]) wr.value()).length);
+        assertTrue(elapsedMillis < 200, "expected the busy-retry mitigation sleep to be brief, took " + elapsedMillis
+                + "ms");
+    }
+
+    @Test
+    public void inputStreamReadReportsClosedAtEof() {
+        WasiIoContext io = new WasiIoContext();
+        int rep = io.registerInputStream(new ByteArrayInputStream(new byte[0]) {
+            @Override
+            public synchronized int available() {
+                return 1; // force past the "nothing available" branch so read() runs and hits EOF
+            }
+        });
+
+        Object[] result = io.inputStreamRead(null, new Object[] { resourceOf(rep), 10L });
+        WitResult wr = (WitResult) result[0];
+        assertFalse(wr.ok());
+        assertEquals(new WitVariant("closed", null), wr.value());
+    }
+
+    @Test
+    public void inputStreamReadOnUnknownResourceReportsClosed() {
+        WasiIoContext io = new WasiIoContext();
+        Object[] result = io.inputStreamRead(null, new Object[] { resourceOf(999), 10L });
+        WitResult wr = (WitResult) result[0];
+        assertFalse(wr.ok());
+        assertEquals(new WitVariant("closed", null), wr.value());
+    }
+
+    private static final class AvailableButThrowingInputStream extends InputStream {
+        @Override
+        public int available() {
+            return 1;
+        }
+
+        @Override
+        public int read() throws IOException {
+            throw new IOException("boom");
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            throw new IOException("boom");
+        }
+    }
+
+    @Test
+    public void inputStreamReadReportsClosedOnIoException() {
+        WasiIoContext io = new WasiIoContext();
+        int rep = io.registerInputStream(new AvailableButThrowingInputStream());
+
+        Object[] result = io.inputStreamRead(null, new Object[] { resourceOf(rep), 10L });
+        WitResult wr = (WitResult) result[0];
+        assertFalse(wr.ok());
+        assertEquals(new WitVariant("closed", null), wr.value());
+    }
+
+    @Test
+    public void pollReturnsIndexOfAlreadyReadyPollableImmediately() {
+        WasiIoContext io = new WasiIoContext();
+        WitResource ready = (WitResource) io.outputStreamSubscribe(null, new Object[0])[0];
+
+        long start = System.nanoTime();
+        Object[] result = io.poll(null, new Object[] { List.of(ready) });
+        long elapsedMillis = (System.nanoTime() - start) / 1_000_000L;
+
+        @SuppressWarnings("unchecked")
+        List<Integer> readyIndices = (List<Integer>) result[0];
+        assertEquals(List.of(0), readyIndices);
+        assertTrue(elapsedMillis < 200);
+    }
+
+    @Test
+    public void pollOnlyReturnsIndicesOfReadyPollables() {
+        WasiIoContext io = new WasiIoContext();
+        int futureRep = io.registerPollableDeadline(System.nanoTime() + 300_000_000L);
+        WitResource future = resourceOf(futureRep);
+        WitResource ready = (WitResource) io.outputStreamSubscribe(null, new Object[0])[0];
+
+        Object[] result = io.poll(null, new Object[] { List.of(future, ready) });
+        @SuppressWarnings("unchecked")
+        List<Integer> readyIndices = (List<Integer>) result[0];
+        assertEquals(List.of(1), readyIndices);
+    }
+
+    @Test
+    public void pollBlocksUntilFutureDeadlineElapses() {
+        WasiIoContext io = new WasiIoContext();
+        long durationNanos = 100_000_000L;
+        int rep = io.registerPollableDeadline(System.nanoTime() + durationNanos);
+
+        long start = System.nanoTime();
+        Object[] result = io.poll(null, new Object[] { List.of(resourceOf(rep)) });
+        long elapsedMillis = (System.nanoTime() - start) / 1_000_000L;
+
+        @SuppressWarnings("unchecked")
+        List<Integer> readyIndices = (List<Integer>) result[0];
+        assertEquals(List.of(0), readyIndices);
+        assertTrue(elapsedMillis >= 80, "expected to block for roughly 100ms, took " + elapsedMillis + "ms");
+    }
+
+    @Test
+    public void pollTreatsUnknownPollableAsReady() {
+        WasiIoContext io = new WasiIoContext();
+        Object[] result = io.poll(null, new Object[] { List.of(resourceOf(999)) });
+        @SuppressWarnings("unchecked")
+        List<Integer> readyIndices = (List<Integer>) result[0];
+        assertEquals(List.of(0), readyIndices);
     }
 
     @Test
