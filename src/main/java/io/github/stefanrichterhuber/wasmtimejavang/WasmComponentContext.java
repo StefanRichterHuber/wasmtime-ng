@@ -9,15 +9,16 @@ import java.util.Set;
  * Model's richer value/resource model.
  */
 public interface WasmComponentContext {
+    public static final SemanticVersion DEFAULT_VERSION = new SemanticVersion(0, 2, 6);
 
     /**
      * Represents an imported component function definition.
      *
      * @param interfaceName The name of the component interface providing the
-     *                       function (e.g. {@code "wasi:cli/environment@0.2.3"},
-     *                       or the empty string for the root instance).
-     * @param funcName       The name of the function within the interface.
-     * @param function       The Java implementation of the function.
+     *                      function (e.g. {@code "wasi:cli/environment@0.2.3"},
+     *                      or the empty string for the root instance).
+     * @param funcName      The name of the function within the interface.
+     * @param function      The Java implementation of the function.
      */
     public record ComponentImportFunction(String interfaceName, String funcName, ComponentFunction function) {
     }
@@ -28,10 +29,10 @@ public interface WasmComponentContext {
      * resource.
      *
      * @param interfaceName The name of the component interface providing the
-     *                       resource.
-     * @param resourceName   The name of the resource within the interface.
-     * @param destructor     Invoked with the resource's opaque {@code rep} when
-     *                       an owned instance is dropped by the guest.
+     *                      resource.
+     * @param resourceName  The name of the resource within the interface.
+     * @param destructor    Invoked with the resource's opaque {@code rep} when
+     *                      an owned instance is dropped by the guest.
      */
     public record ComponentImportResource(String interfaceName, String resourceName, ResourceDestructor destructor) {
     }
@@ -105,7 +106,8 @@ public interface WasmComponentContext {
 
     /**
      * Declares the names of the component interfaces this context actually
-     * implements (e.g. {@code "wasi:io/poll@0.2.6"}, {@code "wasi:io/streams@0.2.6"}).
+     * implements (e.g. {@code "wasi:io/poll@0.2.6"},
+     * {@code "wasi:io/streams@0.2.6"}).
      * <br>
      * Used by {@link WasmtimeComponentLinker#linkRequired(WasmtimeComponent)}
      * to automatically find and link a context providing a specific
@@ -127,5 +129,57 @@ public interface WasmComponentContext {
      */
     default Set<String> getProvidedInterfaces() {
         return Set.of();
+    }
+
+    /**
+     * Sets the version this component should publish
+     * 
+     * @param version Supported version (within {@link #getMiniumVersion()} and
+     *                {@link #getMaximumVersion()} )
+     * @return This WasmComponentContext for method chaining
+     */
+    default WasmComponentContext withVersion(SemanticVersion version) {
+        return this;
+    }
+
+    /**
+     * The version this component publishes
+     * 
+     * @return Version set
+     */
+    default SemanticVersion getVersion() {
+        return DEFAULT_VERSION;
+    }
+
+    /**
+     * The minium version this component supports
+     * 
+     * @return Minium version
+     */
+    default SemanticVersion getMiniumVersion() {
+        return new SemanticVersion(0, 0, 0);
+    }
+
+    /**
+     * The maxium version this component supports
+     * 
+     * @return maxium version
+     */
+    default SemanticVersion getMaximumVersion() {
+        return new SemanticVersion(Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Checks if the given version is within the {@link #getMiniumVersion()} and
+     * {@link #getMaximumVersion()}
+     * 
+     * @param version Version to test
+     * @return Version supported
+     */
+    public default boolean supportsVersion(SemanticVersion version) {
+        if (version == null) {
+            return false;
+        }
+        return version.compareTo(getMiniumVersion()) >= 0 && version.compareTo(getMaximumVersion()) <= 0;
     }
 }

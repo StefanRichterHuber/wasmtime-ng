@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
+import io.github.stefanrichterhuber.wasmtimejavang.SemanticVersion;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance;
 
@@ -18,32 +19,33 @@ public class WasiRandomContext implements WasmComponentContext {
     /** The stable name other contexts reference via {@code getDependencies()}. */
     public static final String NAME = "wasi-random";
 
-    private static final String WASI_RANDOM_RANDOM = "wasi:random/random@0.2.6";
-    private static final String WASI_RANDOM_INSECURE = "wasi:random/insecure@0.2.6";
-    private static final String WASI_RANDOM_INSECURE_SEED = "wasi:random/insecure-seed@0.2.6";
-    
+    private static final String WASI_RANDOM_RANDOM = "wasi:random/random";
+    private static final String WASI_RANDOM_INSECURE = "wasi:random/insecure";
+    private static final String WASI_RANDOM_INSECURE_SEED = "wasi:random/insecure-seed";
+
     private static final Set<String> PROVIDED_INTERFACES = Set.of(
             WASI_RANDOM_RANDOM, WASI_RANDOM_INSECURE, WASI_RANDOM_INSECURE_SEED);
+    private SemanticVersion version = WasiCliContext.DEFAULT_VERSION;
 
-    private final SecureRandom secureRandom;
-    private final Random insecureRandom;
+    private Random secureRandom;
+    private Random insecureRandom;
 
     /**
      * Creates a new random context with default secure and insecure generators.
      */
     public WasiRandomContext() {
-        this(new SecureRandom(), new Random());
+        this.secureRandom = new SecureRandom();
+        this.insecureRandom = new Random();
     }
 
-    /**
-     * Creates a new random context with custom secure and insecure generators.
-     *
-     * @param secureRandom   The secure random generator.
-     * @param insecureRandom The insecure random generator.
-     */
-    public WasiRandomContext(SecureRandom secureRandom, Random insecureRandom) {
+    public WasiRandomContext withRandom(Random random) {
+        this.insecureRandom = random;
+        return this;
+    }
+
+    public WasiRandomContext withSecureRandom(Random secureRandom) {
         this.secureRandom = secureRandom;
-        this.insecureRandom = insecureRandom;
+        return this;
     }
 
     @Override
@@ -59,11 +61,15 @@ public class WasiRandomContext implements WasmComponentContext {
     @Override
     public List<ComponentImportFunction> getImportFunctions() {
         return List.of(
-                new ComponentImportFunction(WASI_RANDOM_RANDOM, "get-random-bytes", this::getRandomBytes),
-                new ComponentImportFunction(WASI_RANDOM_RANDOM, "get-random-u64", this::getRandomU64),
-                new ComponentImportFunction(WASI_RANDOM_INSECURE, "get-insecure-random-bytes", this::getInsecureRandomBytes),
-                new ComponentImportFunction(WASI_RANDOM_INSECURE, "get-insecure-random-u64", this::getInsecureRandomU64),
-                new ComponentImportFunction(WASI_RANDOM_INSECURE_SEED, "insecure-seed", this::insecureSeed));
+                new ComponentImportFunction(WASI_RANDOM_RANDOM + "@" + version, "get-random-bytes",
+                        this::getRandomBytes),
+                new ComponentImportFunction(WASI_RANDOM_RANDOM + "@" + version, "get-random-u64", this::getRandomU64),
+                new ComponentImportFunction(WASI_RANDOM_INSECURE + "@" + version, "get-insecure-random-bytes",
+                        this::getInsecureRandomBytes),
+                new ComponentImportFunction(WASI_RANDOM_INSECURE + "@" + version, "get-insecure-random-u64",
+                        this::getInsecureRandomU64),
+                new ComponentImportFunction(WASI_RANDOM_INSECURE_SEED + "@" + version, "insecure-seed",
+                        this::insecureSeed));
     }
 
     @Override
@@ -96,7 +102,32 @@ public class WasiRandomContext implements WasmComponentContext {
     protected Object[] insecureSeed(WasmtimeComponentInstance instance, Object[] args) {
         long seed1 = this.insecureRandom.nextLong();
         long seed2 = this.insecureRandom.nextLong();
-        // Returns a tuple<u64, u64>, which is represented as a single return value containing an Object array.
+        // Returns a tuple<u64, u64>, which is represented as a single return value
+        // containing an Object array.
         return new Object[] { new Object[] { seed1, seed2 } };
+    }
+
+    @Override
+    public WasiRandomContext withVersion(SemanticVersion version) {
+        if (!supportsVersion(version)) {
+            throw new IllegalArgumentException("Unsupported version: " + version);
+        }
+        this.version = version;
+        return this;
+    }
+
+    @Override
+    public SemanticVersion getVersion() {
+        return this.version;
+    }
+
+    @Override
+    public SemanticVersion getMiniumVersion() {
+        return new SemanticVersion(0, 0, 1);
+    }
+
+    @Override
+    public SemanticVersion getMaximumVersion() {
+        return new SemanticVersion(0, 3, 0);
     }
 }

@@ -37,7 +37,8 @@ public final class WasmtimeComponentLinker implements AutoCloseable {
     private final List<WasmComponentContext> contexts = new ArrayList<>();
 
     /**
-     * Contexts already linked on this linker, keyed by {@link WasmComponentContext#name()}
+     * Contexts already linked on this linker, keyed by
+     * {@link WasmComponentContext#name()}
      * -- populated both by explicit {@link #linkContext} calls and by
      * dependency resolution, so a dependency shared by several contexts
      * (e.g. several contexts all depending on {@code "wasi-io"}) is only
@@ -168,7 +169,7 @@ public final class WasmtimeComponentLinker implements AutoCloseable {
             linkContext(resolveDependency(context, dependencyName), inProgress);
         }
 
-        context.onDependenciesResolved(name -> Optional.ofNullable(linkedByName.get(name)));
+        context.onDependenciesResolved((name, version) -> Optional.ofNullable(linkedByName.get(name)));
 
         this.contexts.add(context);
         linkedByName.put(context.name(), context);
@@ -198,8 +199,8 @@ public final class WasmtimeComponentLinker implements AutoCloseable {
      * @param component The component to read required interfaces from.
      * @return This WasmtimeComponentLinker for method chaining
      * @throws IllegalStateException if any required interface has no linked
-     *                                context and none could be resolved via
-     *                                the configured lookup.
+     *                               context and none could be resolved via
+     *                               the configured lookup.
      */
     public WasmtimeComponentLinker linkRequired(WasmtimeComponent component) {
         List<String> unresolved = new ArrayList<>();
@@ -224,8 +225,9 @@ public final class WasmtimeComponentLinker implements AutoCloseable {
     }
 
     private boolean isInterfaceLinked(String interfaceName) {
+        String bareName = ComponentContextLookup.bareInterfaceName(interfaceName);
         for (WasmComponentContext context : linkedByName.values()) {
-            if (context.getProvidedInterfaces().contains(interfaceName)) {
+            if (context.getProvidedInterfaces().contains(bareName)) {
                 return true;
             }
         }
@@ -237,7 +239,8 @@ public final class WasmtimeComponentLinker implements AutoCloseable {
         if (existing != null) {
             return existing;
         }
-        return dependencyLookup.resolve(dependencyName)
+
+        return dependencyLookup.resolve(dependencyName, dependent.getVersion())
                 .orElseThrow(() -> new IllegalStateException(
                         "Component context \"" + dependent.name() + "\" depends on \"" + dependencyName
                                 + "\", but no such context is linked and none could be resolved via "

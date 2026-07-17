@@ -15,6 +15,7 @@ import org.apache.logging.log4j.Logger;
 import io.github.stefanrichterhuber.wasmtimejavang.ComponentContextLookup;
 import io.github.stefanrichterhuber.wasmtimejavang.ComponentFunction;
 import io.github.stefanrichterhuber.wasmtimejavang.ResourceDestructor;
+import io.github.stefanrichterhuber.wasmtimejavang.SemanticVersion;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
@@ -45,16 +46,16 @@ public class WasiCliContext implements WasmComponentContext {
     /** The stable name other contexts reference via {@code getDependencies()}. */
     public static final String NAME = "wasi-cli";
 
-    private static final String WASI_CLI_ENVIRONMENT = "wasi:cli/environment@0.2.6";
-    private static final String WASI_CLI_EXIT = "wasi:cli/exit@0.2.6";
-    private static final String WASI_CLI_STDIN = "wasi:cli/stdin@0.2.6";
-    private static final String WASI_CLI_STDOUT = "wasi:cli/stdout@0.2.6";
-    private static final String WASI_CLI_STDERR = "wasi:cli/stderr@0.2.6";
-    private static final String WASI_CLI_TERMINAL_INPUT = "wasi:cli/terminal-input@0.2.6";
-    private static final String WASI_CLI_TERMINAL_OUTPUT = "wasi:cli/terminal-output@0.2.6";
-    private static final String WASI_CLI_TERMINAL_STDIN = "wasi:cli/terminal-stdin@0.2.6";
-    private static final String WASI_CLI_TERMINAL_STDOUT = "wasi:cli/terminal-stdout@0.2.6";
-    private static final String WASI_CLI_TERMINAL_STDERR = "wasi:cli/terminal-stderr@0.2.6";
+    private static final String WASI_CLI_ENVIRONMENT = "wasi:cli/environment";
+    private static final String WASI_CLI_EXIT = "wasi:cli/exit";
+    private static final String WASI_CLI_STDIN = "wasi:cli/stdin";
+    private static final String WASI_CLI_STDOUT = "wasi:cli/stdout";
+    private static final String WASI_CLI_STDERR = "wasi:cli/stderr";
+    private static final String WASI_CLI_TERMINAL_INPUT = "wasi:cli/terminal-input";
+    private static final String WASI_CLI_TERMINAL_OUTPUT = "wasi:cli/terminal-output";
+    private static final String WASI_CLI_TERMINAL_STDIN = "wasi:cli/terminal-stdin";
+    private static final String WASI_CLI_TERMINAL_STDOUT = "wasi:cli/terminal-stdout";
+    private static final String WASI_CLI_TERMINAL_STDERR = "wasi:cli/terminal-stderr";
     private static final Set<String> PROVIDED_INTERFACES = Set.of(
             WASI_CLI_ENVIRONMENT, WASI_CLI_EXIT, WASI_CLI_STDIN, WASI_CLI_STDOUT, WASI_CLI_STDERR,
             WASI_CLI_TERMINAL_INPUT, WASI_CLI_TERMINAL_OUTPUT,
@@ -65,6 +66,7 @@ public class WasiCliContext implements WasmComponentContext {
     private InputStream stdin = new NoOpInputStream();
     private OutputStream stdout = new NoOpOutputStream();
     private OutputStream stderr = new NoOpOutputStream();
+    private SemanticVersion version = WasiCliContext.DEFAULT_VERSION;
 
     private WasiIoResources io;
 
@@ -80,7 +82,8 @@ public class WasiCliContext implements WasmComponentContext {
     }
 
     /**
-     * Sets the command-line arguments exposed via {@code wasi:cli/environment#get-arguments}.
+     * Sets the command-line arguments exposed via
+     * {@code wasi:cli/environment#get-arguments}.
      *
      * @param args The arguments.
      * @return This context.
@@ -140,7 +143,7 @@ public class WasiCliContext implements WasmComponentContext {
 
     @Override
     public void onDependenciesResolved(ComponentContextLookup lookup) {
-        this.io = (WasiIoResources) lookup.resolve(WasiIoContext.NAME)
+        this.io = (WasiIoResources) lookup.resolve(WasiIoContext.NAME, getVersion())
                 .orElseThrow(() -> new IllegalStateException(
                         "\"" + NAME + "\" requires a \"" + WasiIoContext.NAME + "\" dependency implementing "
                                 + WasiIoResources.class.getSimpleName()));
@@ -149,29 +152,29 @@ public class WasiCliContext implements WasmComponentContext {
     @Override
     public List<ComponentImportFunction> getImportFunctions() {
         List<ComponentImportFunction> result = new ArrayList<>();
-        result.add(func(WASI_CLI_ENVIRONMENT, "get-environment", this::getEnvironment));
-        result.add(func(WASI_CLI_ENVIRONMENT, "get-arguments", this::getArguments));
-        result.add(func(WASI_CLI_EXIT, "exit", this::exit));
-        result.add(func(WASI_CLI_STDIN, "get-stdin", this::getStdin));
-        result.add(func(WASI_CLI_STDOUT, "get-stdout", this::getStdout));
-        result.add(func(WASI_CLI_STDERR, "get-stderr", this::getStderr));
-        result.add(func(WASI_CLI_TERMINAL_STDIN, "get-terminal-stdin", this::none));
-        result.add(func(WASI_CLI_TERMINAL_STDOUT, "get-terminal-stdout", this::none));
-        result.add(func(WASI_CLI_TERMINAL_STDERR, "get-terminal-stderr", this::none));
+        result.add(func(WASI_CLI_ENVIRONMENT + "@" + version, "get-environment", this::getEnvironment));
+        result.add(func(WASI_CLI_ENVIRONMENT + "@" + version, "get-arguments", this::getArguments));
+        result.add(func(WASI_CLI_EXIT + "@" + version, "exit", this::exit));
+        result.add(func(WASI_CLI_STDIN + "@" + version, "get-stdin", this::getStdin));
+        result.add(func(WASI_CLI_STDOUT + "@" + version, "get-stdout", this::getStdout));
+        result.add(func(WASI_CLI_STDERR + "@" + version, "get-stderr", this::getStderr));
+        result.add(func(WASI_CLI_TERMINAL_STDIN + "@" + version, "get-terminal-stdin", this::none));
+        result.add(func(WASI_CLI_TERMINAL_STDOUT + "@" + version, "get-terminal-stdout", this::none));
+        result.add(func(WASI_CLI_TERMINAL_STDERR + "@" + version, "get-terminal-stderr", this::none));
         return result;
     }
 
     @Override
     public List<ComponentImportResource> getImportResources() {
         return List.of(
-                resource(WASI_CLI_STDIN, "input-stream", io::dropInputStream),
-                resource(WASI_CLI_STDOUT, "output-stream", io::dropOutputStream),
-                resource(WASI_CLI_STDERR, "output-stream", io::dropOutputStream),
-                resource(WASI_CLI_TERMINAL_INPUT, "terminal-input", this::dropNoop),
-                resource(WASI_CLI_TERMINAL_OUTPUT, "terminal-output", this::dropNoop),
-                resource(WASI_CLI_TERMINAL_STDIN, "terminal-input", this::dropNoop),
-                resource(WASI_CLI_TERMINAL_STDOUT, "terminal-output", this::dropNoop),
-                resource(WASI_CLI_TERMINAL_STDERR, "terminal-output", this::dropNoop));
+                resource(WASI_CLI_STDIN + "@" + version, "input-stream", io::dropInputStream),
+                resource(WASI_CLI_STDOUT + "@" + version, "output-stream", io::dropOutputStream),
+                resource(WASI_CLI_STDERR + "@" + version, "output-stream", io::dropOutputStream),
+                resource(WASI_CLI_TERMINAL_INPUT + "@" + version, "terminal-input", this::dropNoop),
+                resource(WASI_CLI_TERMINAL_OUTPUT + "@" + version, "terminal-output", this::dropNoop),
+                resource(WASI_CLI_TERMINAL_STDIN + "@" + version, "terminal-input", this::dropNoop),
+                resource(WASI_CLI_TERMINAL_STDOUT + "@" + version, "terminal-output", this::dropNoop),
+                resource(WASI_CLI_TERMINAL_STDERR + "@" + version, "terminal-output", this::dropNoop));
     }
 
     private static ComponentImportFunction func(String interfaceName, String funcName, ComponentFunction function) {
@@ -224,5 +227,29 @@ public class WasiCliContext implements WasmComponentContext {
     protected Object[] getStderr(WasmtimeComponentInstance instance, Object[] args) {
         int rep = io.registerOutputStream(stderr);
         return new Object[] { WitResource.own("output-stream", rep) };
+    }
+
+    @Override
+    public WasiCliContext withVersion(SemanticVersion version) {
+        if (!supportsVersion(version)) {
+            throw new IllegalArgumentException("Unsupported version: " + version);
+        }
+        this.version = version;
+        return this;
+    }
+
+    @Override
+    public SemanticVersion getVersion() {
+        return this.version;
+    }
+
+    @Override
+    public SemanticVersion getMiniumVersion() {
+        return new SemanticVersion(0, 0, 1);
+    }
+
+    @Override
+    public SemanticVersion getMaximumVersion() {
+        return new SemanticVersion(0, 3, 0);
     }
 }

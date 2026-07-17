@@ -83,9 +83,9 @@ public class WasiIoContextTest {
         WasiIoContext io = new WasiIoContext();
         assertEquals("wasi-io", io.name());
         assertEquals(WasiIoContext.NAME, io.name());
-        assertTrue(io.getProvidedInterfaces().contains("wasi:io/poll@0.2.6"));
-        assertTrue(io.getProvidedInterfaces().contains("wasi:io/streams@0.2.6"));
-        assertTrue(io.getProvidedInterfaces().contains("wasi:io/error@0.2.6"));
+        assertTrue(io.getProvidedInterfaces().contains("wasi:io/poll"));
+        assertTrue(io.getProvidedInterfaces().contains("wasi:io/streams"));
+        assertTrue(io.getProvidedInterfaces().contains("wasi:io/error"));
     }
 
     @Test
@@ -108,13 +108,16 @@ public class WasiIoContextTest {
     public void importResourcesCoverEveryDeclaredResource() {
         WasiIoContext io = new WasiIoContext();
         List<ComponentImportResource> resources = io.getImportResources();
-        assertTrue(resources.stream().anyMatch(r -> r.interfaceName().equals("wasi:io/poll@0.2.6")
+        String poll = "wasi:io/poll@" + io.getVersion();
+        String streams = "wasi:io/streams@" + io.getVersion();
+        String error = "wasi:io/error@" + io.getVersion();
+        assertTrue(resources.stream().anyMatch(r -> r.interfaceName().equals(poll)
                 && r.resourceName().equals("pollable")));
-        assertTrue(resources.stream().anyMatch(r -> r.interfaceName().equals("wasi:io/streams@0.2.6")
+        assertTrue(resources.stream().anyMatch(r -> r.interfaceName().equals(streams)
                 && r.resourceName().equals("input-stream")));
-        assertTrue(resources.stream().anyMatch(r -> r.interfaceName().equals("wasi:io/streams@0.2.6")
+        assertTrue(resources.stream().anyMatch(r -> r.interfaceName().equals(streams)
                 && r.resourceName().equals("output-stream")));
-        assertTrue(resources.stream().anyMatch(r -> r.interfaceName().equals("wasi:io/error@0.2.6")
+        assertTrue(resources.stream().anyMatch(r -> r.interfaceName().equals(error)
                 && r.resourceName().equals("error")));
 
         // The "error" resource destructor is a documented no-op (never actually

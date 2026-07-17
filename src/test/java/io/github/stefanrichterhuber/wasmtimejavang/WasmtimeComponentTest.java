@@ -73,6 +73,26 @@ public class WasmtimeComponentTest {
                 public String name() {
                     return "test-context";
                 }
+
+                @Override
+                public WasmComponentContext withVersion(SemanticVersion version) {
+                    return this;
+                }
+
+                @Override
+                public SemanticVersion getVersion() {
+                    return SemanticVersion.parse("0.3.0");
+                }
+
+                @Override
+                public SemanticVersion getMiniumVersion() {
+                    return SemanticVersion.parse("0.0.1");
+                }
+
+                @Override
+                public SemanticVersion getMaximumVersion() {
+                    return SemanticVersion.parse("0.3.0");
+                }
             });
 
             try (WasmtimeComponentInstance instance = new WasmtimeComponentInstance(store, component, linker)) {

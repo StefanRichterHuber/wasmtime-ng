@@ -52,9 +52,7 @@ public class WasmtimeWasiP2Test {
             linker.linkRequired(component);
 
             try (WasmtimeComponentInstance instance = new WasmtimeComponentInstance(store, component, linker)) {
-                Object[] result = instance.invoke("wasi:cli/run@0.2.6", "run");
-                assertNotNull(result);
-                WitResult status = (WitResult) result[0];
+                WitResult status = instance.asCliRunnable().call();
                 assertTrue(status.ok(), "wasi:cli/run#run did not return Ok");
             }
         }
@@ -97,7 +95,7 @@ public class WasmtimeWasiP2Test {
                 // so a non-zero process::exit(1) in the wasm program surfaces
                 // here as exit code 1, not whatever specific code was passed.
                 ProcExitException exit = assertThrows(ProcExitException.class,
-                        () -> instance.invoke("wasi:cli/run@0.2.6", "run"));
+                        () -> instance.asCliRunnable().call());
                 assertEquals(1, exit.getCode());
             }
         }
@@ -128,17 +126,15 @@ public class WasmtimeWasiP2Test {
                 WasmtimeComponentLinker linker = new WasmtimeComponentLinker(engine, store)) {
 
             assertTrue(component.isCommand(), "component does not export wasi:cli/run");
-
-            // Link WasiCliContext so we can capture stdout of the println calls in our rust code
+            // Link WasiCliContext so we can capture stdout of the println calls in our rust
+            // code
             linker.linkContext(new WasiCliContext().withStdOut(stdout));
 
             // WasiRandomContext will be auto-linked because of the ServiceLoader mechanism
             linker.linkRequired(component);
 
             try (WasmtimeComponentInstance instance = new WasmtimeComponentInstance(store, component, linker)) {
-                Object[] result = instance.invoke("wasi:cli/run@0.2.6", "run");
-                assertNotNull(result);
-                WitResult status = (WitResult) result[0];
+                WitResult status = instance.asCliRunnable().call();
                 assertTrue(status.ok(), "wasi:cli/run#run did not return Ok");
             }
         }

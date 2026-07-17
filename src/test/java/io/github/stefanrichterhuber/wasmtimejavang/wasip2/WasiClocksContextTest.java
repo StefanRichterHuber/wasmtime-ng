@@ -30,7 +30,8 @@ public class WasiClocksContextTest {
 
     private static WasiClocksContext newLinkedClocks(WasiIoContext io) {
         WasiClocksContext clocks = new WasiClocksContext();
-        clocks.onDependenciesResolved(name -> WasiIoContext.NAME.equals(name) ? Optional.of(io) : Optional.empty());
+        clocks.onDependenciesResolved(
+                (name, version) -> WasiIoContext.NAME.equals(name) ? Optional.of(io) : Optional.empty());
         return clocks;
     }
 
@@ -39,15 +40,15 @@ public class WasiClocksContextTest {
         WasiClocksContext clocks = new WasiClocksContext();
         assertEquals("wasi-clocks", clocks.name());
         assertEquals(WasiClocksContext.NAME, clocks.name());
-        assertTrue(clocks.getProvidedInterfaces().contains("wasi:clocks/monotonic-clock@0.2.6"));
-        assertTrue(clocks.getProvidedInterfaces().contains("wasi:clocks/wall-clock@0.2.6"));
+        assertTrue(clocks.getProvidedInterfaces().contains("wasi:clocks/monotonic-clock"));
+        assertTrue(clocks.getProvidedInterfaces().contains("wasi:clocks/wall-clock"));
         assertEquals(List.of(WasiIoContext.NAME), clocks.getDependencies());
     }
 
     @Test
     public void onDependenciesResolvedThrowsWhenWasiIoIsMissing() {
         WasiClocksContext clocks = new WasiClocksContext();
-        ComponentContextLookup emptyLookup = name -> Optional.empty();
+        ComponentContextLookup emptyLookup = (name, version) -> Optional.empty();
         assertThrows(IllegalStateException.class, () -> clocks.onDependenciesResolved(emptyLookup));
     }
 
@@ -55,14 +56,16 @@ public class WasiClocksContextTest {
     public void importFunctionsCoverEveryDeclaredMethod() {
         WasiClocksContext clocks = newLinkedClocks(new WasiIoContext());
         List<ComponentImportFunction> functions = clocks.getImportFunctions();
+        String monotonic = "wasi:clocks/monotonic-clock@" + clocks.getVersion();
+        String wall = "wasi:clocks/wall-clock@" + clocks.getVersion();
 
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:clocks/monotonic-clock@0.2.6")
+        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(monotonic)
                 && f.funcName().equals("now")));
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:clocks/monotonic-clock@0.2.6")
+        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(monotonic)
                 && f.funcName().equals("subscribe-instant")));
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:clocks/monotonic-clock@0.2.6")
+        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(monotonic)
                 && f.funcName().equals("subscribe-duration")));
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:clocks/wall-clock@0.2.6")
+        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(wall)
                 && f.funcName().equals("now")));
     }
 
@@ -74,7 +77,7 @@ public class WasiClocksContextTest {
         List<ComponentImportResource> resources = clocks.getImportResources();
         assertEquals(1, resources.size());
         ComponentImportResource pollableResource = resources.get(0);
-        assertEquals("wasi:clocks/monotonic-clock@0.2.6", pollableResource.interfaceName());
+        assertEquals("wasi:clocks/monotonic-clock@" + clocks.getVersion(), pollableResource.interfaceName());
         assertEquals("pollable", pollableResource.resourceName());
 
         int rep = io.registerPollableDeadline(123L);
@@ -141,7 +144,10 @@ public class WasiClocksContextTest {
         assertTrue(nanoseconds >= 0 && nanoseconds < 1_000_000_000);
     }
 
-    /** Sanity check that {@link WasiClocksContext} really is a {@link WasmComponentContext}. */
+    /**
+     * Sanity check that {@link WasiClocksContext} really is a
+     * {@link WasmComponentContext}.
+     */
     @Test
     public void implementsWasmComponentContext() {
         assertTrue(WasmComponentContext.class.isAssignableFrom(WasiClocksContext.class));

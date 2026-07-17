@@ -20,9 +20,9 @@ public class WasiRandomContextTest {
         WasiRandomContext random = new WasiRandomContext();
         assertEquals("wasi-random", random.name());
         assertEquals(WasiRandomContext.NAME, random.name());
-        assertTrue(random.getProvidedInterfaces().contains("wasi:random/random@0.2.6"));
-        assertTrue(random.getProvidedInterfaces().contains("wasi:random/insecure@0.2.6"));
-        assertTrue(random.getProvidedInterfaces().contains("wasi:random/insecure-seed@0.2.6"));
+        assertTrue(random.getProvidedInterfaces().contains("wasi:random/random"));
+        assertTrue(random.getProvidedInterfaces().contains("wasi:random/insecure"));
+        assertTrue(random.getProvidedInterfaces().contains("wasi:random/insecure-seed"));
         assertTrue(random.getDependencies().isEmpty());
     }
 
@@ -31,16 +31,23 @@ public class WasiRandomContextTest {
         WasiRandomContext random = new WasiRandomContext();
         List<ComponentImportFunction> functions = random.getImportFunctions();
 
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:random/random@0.2.6")
-                && f.funcName().equals("get-random-bytes")));
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:random/random@0.2.6")
-                && f.funcName().equals("get-random-u64")));
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:random/insecure@0.2.6")
-                && f.funcName().equals("get-insecure-random-bytes")));
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:random/insecure@0.2.6")
-                && f.funcName().equals("get-insecure-random-u64")));
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:random/insecure-seed@0.2.6")
-                && f.funcName().equals("insecure-seed")));
+        assertTrue(functions.stream()
+                .anyMatch(f -> f.interfaceName().equals("wasi:random/random" + "@" + random.getVersion())
+                        && f.funcName().equals("get-random-bytes")));
+        assertTrue(functions.stream()
+                .anyMatch(f -> f.interfaceName().equals("wasi:random/random" + "@" + random.getVersion())
+                        && f.funcName().equals("get-random-u64")));
+        assertTrue(
+                functions.stream()
+                        .anyMatch(f -> f.interfaceName().equals("wasi:random/insecure" + "@" + random.getVersion())
+                                && f.funcName().equals("get-insecure-random-bytes")));
+        assertTrue(
+                functions.stream()
+                        .anyMatch(f -> f.interfaceName().equals("wasi:random/insecure" + "@" + random.getVersion())
+                                && f.funcName().equals("get-insecure-random-u64")));
+        assertTrue(functions.stream()
+                .anyMatch(f -> f.interfaceName().equals("wasi:random/insecure-seed" + "@" + random.getVersion())
+                        && f.funcName().equals("insecure-seed")));
     }
 
     @Test
@@ -89,7 +96,7 @@ public class WasiRandomContextTest {
     public void usesCustomRandomGenerators() {
         byte[] fixedBytes = new byte[8];
         fixedBytes[0] = 42;
-        
+
         SecureRandom mockSecure = new SecureRandom() {
             @Override
             public void nextBytes(byte[] bytes) {
@@ -109,12 +116,12 @@ public class WasiRandomContextTest {
             }
         };
 
-        WasiRandomContext random = new WasiRandomContext(mockSecure, mockInsecure);
-        
-        byte[] secureBytes = (byte[]) random.getRandomBytes(null, new Object[]{8L})[0];
+        WasiRandomContext random = new WasiRandomContext().withSecureRandom(mockSecure).withRandom(mockInsecure);
+
+        byte[] secureBytes = (byte[]) random.getRandomBytes(null, new Object[] { 8L })[0];
         assertEquals(42, secureBytes[0]);
 
-        byte[] insecureBytes = (byte[]) random.getInsecureRandomBytes(null, new Object[]{8L})[0];
+        byte[] insecureBytes = (byte[]) random.getInsecureRandomBytes(null, new Object[] { 8L })[0];
         assertEquals(42, insecureBytes[0]);
 
         assertEquals(999L, random.getInsecureRandomU64(null, new Object[0])[0]);

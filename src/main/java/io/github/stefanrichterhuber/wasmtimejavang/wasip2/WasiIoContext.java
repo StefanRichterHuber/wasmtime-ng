@@ -16,6 +16,7 @@ import org.apache.logging.log4j.Logger;
 
 import io.github.stefanrichterhuber.wasmtimejavang.ComponentFunction;
 import io.github.stefanrichterhuber.wasmtimejavang.ResourceDestructor;
+import io.github.stefanrichterhuber.wasmtimejavang.SemanticVersion;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
@@ -29,11 +30,13 @@ import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
  * <br>
  * Owns the actual stream/pollable tables, exposed via {@link WasiIoResources}
  * so contexts implementing other interfaces that hand out these same
- * resource kinds (e.g. {@code wasi:cli/stdout}, {@code wasi:clocks/monotonic-clock})
+ * resource kinds (e.g. {@code wasi:cli/stdout},
+ * {@code wasi:clocks/monotonic-clock})
  * can depend on {@code "wasi-io"} and share them rather than keeping separate
  * tables.
  * <br>
- * {@code input-stream} reading only implements {@code [method]input-stream.blocking-read}
+ * {@code input-stream} reading only implements
+ * {@code [method]input-stream.blocking-read}
  * (what Rust's {@code std::io::Read} for wasm32-wasip2 actually calls) and
  * {@code [method]input-stream.subscribe}, not the non-blocking {@code read}
  * or {@code skip}/{@code blocking-skip} -- both would need genuinely
@@ -49,18 +52,20 @@ public class WasiIoContext implements WasmComponentContext, WasiIoResources {
     /** The stable name other contexts reference via {@code getDependencies()}. */
     public static final String NAME = "wasi-io";
 
-    private static final String WASI_IO_POLL = "wasi:io/poll@0.2.6";
-    private static final String WASI_IO_ERROR = "wasi:io/error@0.2.6";
-    private static final String WASI_IO_STREAMS = "wasi:io/streams@0.2.6";
+    private static final String WASI_IO_POLL = "wasi:io/poll";
+    private static final String WASI_IO_ERROR = "wasi:io/error";
+    private static final String WASI_IO_STREAMS = "wasi:io/streams";
 
-    /** Upper bound on how many bytes a single {@code blocking-read} call returns. */
+    /**
+     * Upper bound on how many bytes a single {@code blocking-read} call returns.
+     */
     private static final int MAX_READ_CHUNK = 65536;
 
     private final Map<Integer, InputStream> inputStreams = new ConcurrentHashMap<>();
     private final Map<Integer, OutputStream> outputStreams = new ConcurrentHashMap<>();
     private final Map<Integer, Long> pollables = new ConcurrentHashMap<>();
     private final AtomicInteger nextRep = new AtomicInteger(1);
-
+    private SemanticVersion version = WasiCliContext.DEFAULT_VERSION;
     private static final Set<String> PROVIDED_INTERFACES = Set.of(WASI_IO_POLL, WASI_IO_ERROR, WASI_IO_STREAMS);
 
     @Override
@@ -134,27 +139,31 @@ public class WasiIoContext implements WasmComponentContext, WasiIoResources {
     @Override
     public List<ComponentImportFunction> getImportFunctions() {
         List<ComponentImportFunction> result = new ArrayList<>();
-        result.add(func(WASI_IO_POLL, "[method]pollable.block", this::pollableBlock));
-        result.add(func(WASI_IO_STREAMS, "[method]input-stream.blocking-read", this::inputStreamBlockingRead));
-        result.add(func(WASI_IO_STREAMS, "[method]input-stream.subscribe", this::inputStreamSubscribe));
-        result.add(func(WASI_IO_STREAMS, "[method]output-stream.check-write", this::outputStreamCheckWrite));
-        result.add(func(WASI_IO_STREAMS, "[method]output-stream.write", this::outputStreamWrite));
-        result.add(func(WASI_IO_STREAMS, "[method]output-stream.blocking-write-and-flush",
+        result.add(func(WASI_IO_POLL + "@" + version, "[method]pollable.block", this::pollableBlock));
+        result.add(func(WASI_IO_STREAMS + "@" + version, "[method]input-stream.blocking-read",
+                this::inputStreamBlockingRead));
+        result.add(func(WASI_IO_STREAMS + "@" + version, "[method]input-stream.subscribe", this::inputStreamSubscribe));
+        result.add(func(WASI_IO_STREAMS + "@" + version, "[method]output-stream.check-write",
+                this::outputStreamCheckWrite));
+        result.add(func(WASI_IO_STREAMS + "@" + version, "[method]output-stream.write", this::outputStreamWrite));
+        result.add(func(WASI_IO_STREAMS + "@" + version, "[method]output-stream.blocking-write-and-flush",
                 this::outputStreamBlockingWriteAndFlush));
-        result.add(func(WASI_IO_STREAMS, "[method]output-stream.blocking-flush", this::outputStreamBlockingFlush));
-        result.add(func(WASI_IO_STREAMS, "[method]output-stream.subscribe", this::outputStreamSubscribe));
+        result.add(func(WASI_IO_STREAMS + "@" + version, "[method]output-stream.blocking-flush",
+                this::outputStreamBlockingFlush));
+        result.add(
+                func(WASI_IO_STREAMS + "@" + version, "[method]output-stream.subscribe", this::outputStreamSubscribe));
         return result;
     }
 
     @Override
     public List<ComponentImportResource> getImportResources() {
         return List.of(
-                resource(WASI_IO_POLL, "pollable", this::dropPollable),
-                resource(WASI_IO_STREAMS, "input-stream", this::dropInputStream),
-                resource(WASI_IO_STREAMS, "output-stream", this::dropOutputStream),
-                resource(WASI_IO_STREAMS, "error", this::dropNoop),
-                resource(WASI_IO_STREAMS, "pollable", this::dropPollable),
-                resource(WASI_IO_ERROR, "error", this::dropNoop));
+                resource(WASI_IO_POLL + "@" + version, "pollable", this::dropPollable),
+                resource(WASI_IO_STREAMS + "@" + version, "input-stream", this::dropInputStream),
+                resource(WASI_IO_STREAMS + "@" + version, "output-stream", this::dropOutputStream),
+                resource(WASI_IO_STREAMS + "@" + version, "error", this::dropNoop),
+                resource(WASI_IO_STREAMS + "@" + version, "pollable", this::dropPollable),
+                resource(WASI_IO_ERROR + "@" + version, "error", this::dropNoop));
     }
 
     private static ComponentImportFunction func(String interfaceName, String funcName, ComponentFunction function) {
@@ -283,5 +292,29 @@ public class WasiIoContext implements WasmComponentContext, WasiIoResources {
     protected Object[] inputStreamSubscribe(WasmtimeComponentInstance instance, Object[] args) {
         int rep = registerPollableDeadline(ALWAYS_READY);
         return new Object[] { WitResource.own("pollable", rep) };
+    }
+
+    @Override
+    public WasiIoContext withVersion(SemanticVersion version) {
+        if (!supportsVersion(version)) {
+            throw new IllegalArgumentException("Unsupported version: " + version);
+        }
+        this.version = version;
+        return this;
+    }
+
+    @Override
+    public SemanticVersion getVersion() {
+        return this.version;
+    }
+
+    @Override
+    public SemanticVersion getMiniumVersion() {
+        return new SemanticVersion(0, 0, 1);
+    }
+
+    @Override
+    public SemanticVersion getMaximumVersion() {
+        return new SemanticVersion(0, 3, 0);
     }
 }

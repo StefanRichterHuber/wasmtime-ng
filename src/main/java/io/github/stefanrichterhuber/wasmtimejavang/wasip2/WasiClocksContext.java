@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Set;
 
 import io.github.stefanrichterhuber.wasmtimejavang.ComponentContextLookup;
+import io.github.stefanrichterhuber.wasmtimejavang.SemanticVersion;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
@@ -26,11 +27,12 @@ public class WasiClocksContext implements WasmComponentContext {
     /** The stable name other contexts reference via {@code getDependencies()}. */
     public static final String NAME = "wasi-clocks";
 
-    private static final String WASI_CLOCKS_MONOTONIC = "wasi:clocks/monotonic-clock@0.2.6";
-    private static final String WASI_CLOCKS_WALL = "wasi:clocks/wall-clock@0.2.6";
+    private static final String WASI_CLOCKS_MONOTONIC = "wasi:clocks/monotonic-clock";
+    private static final String WASI_CLOCKS_WALL = "wasi:clocks/wall-clock";
     private static final Set<String> PROVIDED_INTERFACES = Set.of(WASI_CLOCKS_MONOTONIC, WASI_CLOCKS_WALL);
 
     private WasiIoResources io;
+    private SemanticVersion version = WasiCliContext.DEFAULT_VERSION;
 
     @Override
     public String name() {
@@ -49,7 +51,7 @@ public class WasiClocksContext implements WasmComponentContext {
 
     @Override
     public void onDependenciesResolved(ComponentContextLookup lookup) {
-        this.io = (WasiIoResources) lookup.resolve(WasiIoContext.NAME)
+        this.io = (WasiIoResources) lookup.resolve(WasiIoContext.NAME, getVersion())
                 .orElseThrow(() -> new IllegalStateException(
                         "\"" + NAME + "\" requires a \"" + WasiIoContext.NAME + "\" dependency implementing "
                                 + WasiIoResources.class.getSimpleName()));
@@ -58,15 +60,18 @@ public class WasiClocksContext implements WasmComponentContext {
     @Override
     public List<ComponentImportFunction> getImportFunctions() {
         return List.of(
-                new ComponentImportFunction(WASI_CLOCKS_MONOTONIC, "now", this::monotonicNow),
-                new ComponentImportFunction(WASI_CLOCKS_MONOTONIC, "subscribe-instant", this::subscribeInstant),
-                new ComponentImportFunction(WASI_CLOCKS_MONOTONIC, "subscribe-duration", this::subscribeDuration),
-                new ComponentImportFunction(WASI_CLOCKS_WALL, "now", this::wallClockNow));
+                new ComponentImportFunction(WASI_CLOCKS_MONOTONIC + "@" + version, "now", this::monotonicNow),
+                new ComponentImportFunction(WASI_CLOCKS_MONOTONIC + "@" + version, "subscribe-instant",
+                        this::subscribeInstant),
+                new ComponentImportFunction(WASI_CLOCKS_MONOTONIC + "@" + version, "subscribe-duration",
+                        this::subscribeDuration),
+                new ComponentImportFunction(WASI_CLOCKS_WALL + "@" + version, "now", this::wallClockNow));
     }
 
     @Override
     public List<ComponentImportResource> getImportResources() {
-        return List.of(new ComponentImportResource(WASI_CLOCKS_MONOTONIC, "pollable", io::dropPollable));
+        return List
+                .of(new ComponentImportResource(WASI_CLOCKS_MONOTONIC + "@" + version, "pollable", io::dropPollable));
     }
 
     protected Object[] monotonicNow(WasmtimeComponentInstance instance, Object[] args) {
@@ -91,5 +96,29 @@ public class WasiClocksContext implements WasmComponentContext {
         datetime.put("seconds", millis / 1000L);
         datetime.put("nanoseconds", (int) ((millis % 1000L) * 1_000_000L));
         return new Object[] { datetime };
+    }
+
+    @Override
+    public WasiClocksContext withVersion(SemanticVersion version) {
+        if (!supportsVersion(version)) {
+            throw new IllegalArgumentException("Unsupported version: " + version);
+        }
+        this.version = version;
+        return this;
+    }
+
+    @Override
+    public SemanticVersion getVersion() {
+        return this.version;
+    }
+
+    @Override
+    public SemanticVersion getMiniumVersion() {
+        return new SemanticVersion(0, 0, 1);
+    }
+
+    @Override
+    public SemanticVersion getMaximumVersion() {
+        return new SemanticVersion(0, 3, 0);
     }
 }

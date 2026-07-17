@@ -228,6 +228,102 @@ There is some preliminary support for WASI threads using the additional context 
 
 > **Info:** As of now, nightly toolchain is required to properly build rust wasm wasip1 apps with thread support!
 
+## WASI Preview 2 / Component Model (`wasm32-wasip2`)
+
+Alongside core-module WASI Preview 1, this library supports the [Component Model](https://component-model.bytecodealliance.org/) (`wasm32-wasip2` binaries) — again with WASI implemented on the Java side rather than delegated to `wasmtime-wasi`. It's built from three pieces:
+
+* `WasmtimeComponent` — compiles a component, and can introspect it *without instantiating it*: `getImportInterfaces()` / `getExportInterfaces()` read the interfaces a component needs/exports straight from the compiled binary, and `isCommand()` reports whether it exports `wasi:cli/run` (i.e. is runnable as a command, as opposed to e.g. a service with no entry point).
+* `WasmtimeComponentLinker` — resolves imports, mirroring `WasmtimeLinker` but for the richer Component Model value/resource model.
+* `WasmtimeComponentInstance` — an instantiated component; exported functions are invoked dynamically by interface + function name via `invoke(...)`, or via the `asCliRunnable()` convenience for a `wasi:cli/run` command.
+
+```java
+try (
+    FileInputStream fis = new FileInputStream("hello.wasm");
+    WasmtimeEngine engine = new WasmtimeEngine();
+    WasmtimeComponent component = new WasmtimeComponent(engine, fis);
+    WasmtimeStore store = new WasmtimeStore(engine);
+    WasmtimeComponentLinker linker = new WasmtimeComponentLinker(engine, store)
+) {
+    // Link an explicitly-configured context (captures stdout)...
+    ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+    linker.linkContext(new WasiCliContext().withStdOut(stdout).withArguments(List.of("hello")));
+
+    // ...then auto-link whatever else the component actually needs (wasi:clocks,
+    // wasi:random, ...), discovered straight off the compiled component.
+    linker.linkRequired(component);
+
+    try (WasmtimeComponentInstance instance = new WasmtimeComponentInstance(store, component, linker)) {
+        instance.asCliRunnable().call(); // invokes wasi:cli/run#run
+    }
+}
+```
+
+`linkRequired` only fills in interfaces nothing has already been linked for, so `linkContext(...)` calls made beforehand always take precedence — this is also the mechanism for overriding built-in behavior (see below).
+
+### Supported WASI Preview 2 interfaces
+
+Each interface group lives in its own `WasmComponentContext` implementation under the `wasip2` package, and all four are auto-discovered by `linkRequired(...)` with zero configuration.
+
+| Interfaces | Class | Status | Configuration |
+| :--- | :--- | :---: | :--- |
+| `wasi:cli/environment,exit,stdin,stdout,stderr,terminal-*` | `WasiCliContext` | ✅ | `withEnvs(Map)`, `withArguments(List)`, `withStdIn/StdOut/StdErr(...)`. `terminal-*` always reports "not a tty" |
+| `wasi:clocks/monotonic-clock,wall-clock` | `WasiClocksContext` | ✅ | none (uses `System.nanoTime()`/`System.currentTimeMillis()`) |
+| `wasi:random/random,insecure,insecure-seed` | `WasiRandomContext` | ✅ | `withSecureRandom(Random)`, `withRandom(Random)` (the insecure generator) |
+| `wasi:io/poll,streams,error` | `WasiIoContext` | 🟡 | Owns the shared stream/pollable tables other contexts (`WasiCliContext`, `WasiClocksContext`) depend on. Only blocking reads/writes are implemented (`[method]input-stream.blocking-read`, no non-blocking `read`/`skip`) |
+| `wasi:filesystem/*` | — | ❌ | Not yet implemented |
+| `wasi:sockets/*` | — | ❌ | Not yet implemented |
+
+### Implementing your own component context
+
+Implement `WasmComponentContext` to expose custom Java functions/resources to a component's imports:
+
+```java
+public class MyContext implements WasmComponentContext {
+    @Override
+    public String name() { return "my-context"; } // stable id, referenced by getDependencies()
+
+    @Override
+    public List<ComponentImportFunction> getImportFunctions() {
+        return List.of(new ComponentImportFunction("my:custom/greet@1.0.0", "hello",
+                (instance, args) -> new Object[] { "Hello, " + args[0] }));
+    }
+
+    @Override
+    public List<ComponentImportResource> getImportResources() { return List.of(); }
+
+    @Override
+    public WasmComponentContext withVersion(SemanticVersion version) { return this; }
+
+    @Override
+    public SemanticVersion getVersion() { return new SemanticVersion(1, 0, 0); }
+}
+```
+
+Link it explicitly with `linker.linkContext(new MyContext())`. To depend on another context (e.g. to share `WasiIoContext`'s stream table), declare it by bare name in `getDependencies()` and resolve it in `onDependenciesResolved(ComponentContextLookup)` — `WasmtimeComponentLinker` links declared dependencies first and guarantees they're available by the time it's called:
+
+```java
+@Override
+public List<String> getDependencies() { return List.of(WasiIoContext.NAME); }
+
+@Override
+public void onDependenciesResolved(ComponentContextLookup lookup) {
+    this.io = (WasiIoResources) lookup.resolve(WasiIoContext.NAME, getVersion()).orElseThrow();
+}
+```
+
+To make a context discoverable by `linkRequired(component)` instead of linking it explicitly, declare the (bare, version-independent) interface names it implements via `getProvidedInterfaces()` and register the class as a `WasmComponentContext` [`ServiceLoader`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/ServiceLoader.html) provider (a `META-INF/services/io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext` file listing the class, which needs a public no-arg constructor or a public static `provider()` method) — this is exactly how the four built-in `Wasi*Context` classes register themselves.
+
+### Overriding a built-in WASI Preview 2 context
+
+None of the `Wasi*Context` classes are `final`, and the built-ins are only ever *auto-linked* — never forced — so there are two ways to override one:
+
+1. **Per-linker, explicit**: call `linker.linkContext(...)` with your own instance (a subclass, or an unrelated implementation) using the *same* `name()` (e.g. `"wasi-cli"`) before calling `linkRequired(...)`. Since `linkRequired` only auto-links interfaces nothing has claimed yet, your explicitly-linked context wins and the built-in provider is never consulted.
+2. **Global, via lookup strategy**: register your own `ComponentContextLookup` (e.g. a `RegistryComponentContextLookup` populated with your preferred instances, or a custom implementation) as a `META-INF/services/io.github.stefanrichterhuber.wasmtimejavang.ComponentContextLookup` provider. `WasmtimeComponentLinker` resolves its dependency-lookup strategy the same SPI way, falling back to `ServiceLoaderComponentContextLookup` (which is what discovers the built-ins) only if nothing else is registered — so this replaces resolution for every linker in the process, not just one.
+
+### Version negotiation
+
+Every `WasmComponentContext` tracks a `SemanticVersion` (`withVersion`/`getVersion`), used to build the actual versioned interface name (e.g. `"wasi:cli/environment@0.2.6"`) each import is registered under — `getProvidedInterfaces()` itself stays version-independent (bare names), so lookup/auto-discovery doesn't need to know a component's exact required version up front. `getMiniumVersion()`/`getMaximumVersion()` (defaulted to accept anything) bound what `supportsVersion(...)` — and therefore `ComponentContextLookup.resolve(...)` — accepts; the built-in WASI contexts default to `0.2.6` (what `cargo build --target wasm32-wasip2` on current stable Rust actually emits) and accept `[0.0.1, 0.3.0]`, so they're ready for the eventual WASI 0.3 interfaces without code changes once toolchains catch up, but can be pinned with `.withVersion(...)` if a component needs something else within that range.
+
 ## Architecture
 
 The project is structured into three distinct layers:

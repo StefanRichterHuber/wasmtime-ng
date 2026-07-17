@@ -41,9 +41,13 @@ import java.util.ServiceLoader;
 public class ServiceLoaderComponentContextLookup implements ComponentContextLookup {
 
     @Override
-    public Optional<WasmComponentContext> resolve(String name) {
+    public Optional<WasmComponentContext> resolve(String name, SemanticVersion version) {
         for (WasmComponentContext context : ServiceLoader.load(WasmComponentContext.class)) {
             if (name.equals(context.name())) {
+                if (!context.supportsVersion(version)) {
+                    continue;
+                }
+                context.withVersion(version);
                 return Optional.of(context);
             }
         }
@@ -52,8 +56,24 @@ public class ServiceLoaderComponentContextLookup implements ComponentContextLook
 
     @Override
     public Optional<WasmComponentContext> resolveProviding(String interfaceName) {
+        // Extract version and name from the interface name
+        String[] parts = interfaceName.split("@");
+        if (parts.length != 2) {
+            return Optional.empty();
+        }
+        String name = parts[0];
+        SemanticVersion version = SemanticVersion.parse(parts[1]);
+        if (version == null) {
+            return Optional.empty();
+        }
+
         for (WasmComponentContext context : ServiceLoader.load(WasmComponentContext.class)) {
-            if (context.getProvidedInterfaces().contains(interfaceName)) {
+            if (context.getProvidedInterfaces().contains(name)) {
+                if (!context.supportsVersion(version)) {
+                    continue;
+                }
+                context.withVersion(version);
+
                 return Optional.of(context);
             }
         }

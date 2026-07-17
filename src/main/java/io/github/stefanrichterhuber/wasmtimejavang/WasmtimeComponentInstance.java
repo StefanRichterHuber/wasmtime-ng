@@ -3,6 +3,9 @@ package io.github.stefanrichterhuber.wasmtimejavang;
 import java.lang.ref.Cleaner;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Callable;
+
+import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 
 /**
  * Represents an instantiated WebAssembly component.
@@ -129,5 +132,23 @@ public final class WasmtimeComponentInstance implements AutoCloseable {
      */
     public WasmtimeComponentLinker getLinker() {
         return this.linker;
+    }
+
+    /**
+     * If this component exports the interface wasi:cli/run, then create a callable
+     * of it
+     * 
+     * @return Callable for this component
+     */
+    public Callable<WitResult> asCliRunnable() {
+        final String runInterface = component.getExportInterfaces().stream()
+                .filter(name -> name.startsWith("wasi:cli/run@"))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Component does not export wasi:cli/run"));
+
+        return () -> {
+            final Object[] result = this.invoke(runInterface, "run");
+            return (WitResult) result[0];
+        };
     }
 }

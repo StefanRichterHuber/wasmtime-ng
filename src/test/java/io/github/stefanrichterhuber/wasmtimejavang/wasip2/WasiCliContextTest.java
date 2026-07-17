@@ -32,7 +32,8 @@ public class WasiCliContextTest {
 
     private static WasiCliContext newLinkedCli(WasiIoContext io) {
         WasiCliContext cli = new WasiCliContext();
-        cli.onDependenciesResolved(name -> WasiIoContext.NAME.equals(name) ? Optional.of(io) : Optional.empty());
+        cli.onDependenciesResolved(
+                (name, version) -> WasiIoContext.NAME.equals(name) ? Optional.of(io) : Optional.empty());
         return cli;
     }
 
@@ -49,22 +50,22 @@ public class WasiCliContextTest {
         assertEquals(List.of(WasiIoContext.NAME), cli.getDependencies());
 
         var provided = cli.getProvidedInterfaces();
-        assertTrue(provided.contains("wasi:cli/environment@0.2.6"));
-        assertTrue(provided.contains("wasi:cli/exit@0.2.6"));
-        assertTrue(provided.contains("wasi:cli/stdin@0.2.6"));
-        assertTrue(provided.contains("wasi:cli/stdout@0.2.6"));
-        assertTrue(provided.contains("wasi:cli/stderr@0.2.6"));
-        assertTrue(provided.contains("wasi:cli/terminal-input@0.2.6"));
-        assertTrue(provided.contains("wasi:cli/terminal-output@0.2.6"));
-        assertTrue(provided.contains("wasi:cli/terminal-stdin@0.2.6"));
-        assertTrue(provided.contains("wasi:cli/terminal-stdout@0.2.6"));
-        assertTrue(provided.contains("wasi:cli/terminal-stderr@0.2.6"));
+        assertTrue(provided.contains("wasi:cli/environment"));
+        assertTrue(provided.contains("wasi:cli/exit"));
+        assertTrue(provided.contains("wasi:cli/stdin"));
+        assertTrue(provided.contains("wasi:cli/stdout"));
+        assertTrue(provided.contains("wasi:cli/stderr"));
+        assertTrue(provided.contains("wasi:cli/terminal-input"));
+        assertTrue(provided.contains("wasi:cli/terminal-output"));
+        assertTrue(provided.contains("wasi:cli/terminal-stdin"));
+        assertTrue(provided.contains("wasi:cli/terminal-stdout"));
+        assertTrue(provided.contains("wasi:cli/terminal-stderr"));
     }
 
     @Test
     public void onDependenciesResolvedThrowsWhenWasiIoIsMissing() {
         WasiCliContext cli = new WasiCliContext();
-        ComponentContextLookup emptyLookup = name -> Optional.empty();
+        ComponentContextLookup emptyLookup = (name, version) -> Optional.empty();
         assertThrows(IllegalStateException.class, () -> cli.onDependenciesResolved(emptyLookup));
     }
 
@@ -82,24 +83,32 @@ public class WasiCliContextTest {
     public void importFunctionsCoverEveryDeclaredMethod() {
         WasiCliContext cli = newLinkedCli(new WasiIoContext());
         List<ComponentImportFunction> functions = cli.getImportFunctions();
+        String environment = "wasi:cli/environment@" + cli.getVersion();
+        String exit = "wasi:cli/exit@" + cli.getVersion();
+        String stdin = "wasi:cli/stdin@" + cli.getVersion();
+        String stdout = "wasi:cli/stdout@" + cli.getVersion();
+        String stderr = "wasi:cli/stderr@" + cli.getVersion();
+        String terminalStdin = "wasi:cli/terminal-stdin@" + cli.getVersion();
+        String terminalStdout = "wasi:cli/terminal-stdout@" + cli.getVersion();
+        String terminalStderr = "wasi:cli/terminal-stderr@" + cli.getVersion();
 
         assertTrue(functions.stream().anyMatch(
-                f -> f.interfaceName().equals("wasi:cli/environment@0.2.6") && f.funcName().equals("get-environment")));
+                f -> f.interfaceName().equals(environment) && f.funcName().equals("get-environment")));
         assertTrue(functions.stream().anyMatch(
-                f -> f.interfaceName().equals("wasi:cli/environment@0.2.6") && f.funcName().equals("get-arguments")));
+                f -> f.interfaceName().equals(environment) && f.funcName().equals("get-arguments")));
         assertTrue(functions.stream()
-                .anyMatch(f -> f.interfaceName().equals("wasi:cli/exit@0.2.6") && f.funcName().equals("exit")));
+                .anyMatch(f -> f.interfaceName().equals(exit) && f.funcName().equals("exit")));
         assertTrue(functions.stream()
-                .anyMatch(f -> f.interfaceName().equals("wasi:cli/stdin@0.2.6") && f.funcName().equals("get-stdin")));
+                .anyMatch(f -> f.interfaceName().equals(stdin) && f.funcName().equals("get-stdin")));
         assertTrue(functions.stream().anyMatch(
-                f -> f.interfaceName().equals("wasi:cli/stdout@0.2.6") && f.funcName().equals("get-stdout")));
+                f -> f.interfaceName().equals(stdout) && f.funcName().equals("get-stdout")));
         assertTrue(functions.stream().anyMatch(
-                f -> f.interfaceName().equals("wasi:cli/stderr@0.2.6") && f.funcName().equals("get-stderr")));
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:cli/terminal-stdin@0.2.6")
+                f -> f.interfaceName().equals(stderr) && f.funcName().equals("get-stderr")));
+        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(terminalStdin)
                 && f.funcName().equals("get-terminal-stdin")));
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:cli/terminal-stdout@0.2.6")
+        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(terminalStdout)
                 && f.funcName().equals("get-terminal-stdout")));
-        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals("wasi:cli/terminal-stderr@0.2.6")
+        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(terminalStderr)
                 && f.funcName().equals("get-terminal-stderr")));
     }
 
@@ -110,13 +119,15 @@ public class WasiCliContextTest {
         List<ComponentImportResource> resources = cli.getImportResources();
 
         ComponentImportResource stdinResource = resources.stream()
-                .filter(r -> r.interfaceName().equals("wasi:cli/stdin@0.2.6")).findFirst().orElseThrow();
+                .filter(r -> r.interfaceName().equals("wasi:cli/stdin@" + cli.getVersion())).findFirst()
+                .orElseThrow();
         int inRep = io.registerInputStream(new ByteArrayInputStream(new byte[0]));
         stdinResource.destructor().drop(inRep);
         assertNull(io.getInputStream(inRep));
 
         ComponentImportResource stdoutResource = resources.stream()
-                .filter(r -> r.interfaceName().equals("wasi:cli/stdout@0.2.6")).findFirst().orElseThrow();
+                .filter(r -> r.interfaceName().equals("wasi:cli/stdout@" + cli.getVersion())).findFirst()
+                .orElseThrow();
         int outRep = io.registerOutputStream(new ByteArrayOutputStream());
         stdoutResource.destructor().drop(outRep);
         assertNull(io.getOutputStream(outRep));
