@@ -13,6 +13,14 @@ public final class V128 extends Number implements Comparable<V128> {
      * WASM memory is always little endian
      */
     private static final ByteOrder BYTE_ORDER = ByteOrder.LITTLE_ENDIAN;
+    /**
+     * Smallest value representable as a 128-bit signed integer (-2^127).
+     */
+    private static final BigInteger MIN_VALUE = BigInteger.ONE.shiftLeft(127).negate();
+    /**
+     * Largest value representable as a 128-bit unsigned integer (2^128 - 1).
+     */
+    private static final BigInteger MAX_VALUE = BigInteger.ONE.shiftLeft(128).subtract(BigInteger.ONE);
     private final byte[] parts;
 
     /**
@@ -27,7 +35,7 @@ public final class V128 extends Number implements Comparable<V128> {
         if (parts.length != 16) {
             throw new IllegalArgumentException("V128 needs to be byte[16]");
         }
-        this.parts = parts;
+        this.parts = Arrays.copyOf(parts, parts.length);
     }
 
     /**
@@ -100,8 +108,8 @@ public final class V128 extends Number implements Comparable<V128> {
         if (value == null) {
             throw new NullPointerException("value must not be null");
         }
-        if (value.bitLength() > 128) {
-            throw new IllegalArgumentException("value must be at most 128 bits");
+        if (value.compareTo(MIN_VALUE) < 0 || value.compareTo(MAX_VALUE) > 0) {
+            throw new IllegalArgumentException("value must fit in 128 bits (signed or unsigned)");
         }
         final byte[] bytes = value.toByteArray();
         this.parts = new byte[16];
@@ -125,7 +133,7 @@ public final class V128 extends Number implements Comparable<V128> {
      * @return byte array
      */
     public byte[] getBytes() {
-        return parts;
+        return Arrays.copyOf(parts, parts.length);
     }
 
     /**
