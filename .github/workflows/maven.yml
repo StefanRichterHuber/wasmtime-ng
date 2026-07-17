@@ -27,7 +27,7 @@ jobs:
           distribution: temurin
           cache: maven
       - name: Install additional wasm targets for rust
-        run: rustup target add wasm32-wasip1 && rustup target add wasm32-wasip1-threads --toolchain nightly
+        run: rustup target add wasm32-wasip1 wasm32-wasip2 && rustup target add wasm32-wasip1-threads --toolchain nightly
       - name: Install cargo cross
         run: cargo install cross
       - name: Build with Maven

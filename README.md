@@ -301,31 +301,107 @@ linker.linkRequired(component); // pulls in wasi-io, wasi-clocks, etc. as needed
 
 ### Implementing your own component context
 
-Implement `WasmComponentContext` to expose custom Java functions/resources to a component's imports:
+This is the mechanism that matters most for actually using this library: WASI is just the *built-in* set of `WasmComponentContext` implementations, and any Java application can define its own to expose custom host functionality — database access, business logic, whatever — to a component's imports, the exact same way. This section walks through a complete, real, runnable example (its full source is in the repo and covered by `WasmtimeCustomComponentTest`, so it's guaranteed to stay in sync with the code, not just aspirational documentation).
+
+**1. Define the interface in WIT.** This is the contract the guest and the host agree on — a Java-side `WasmComponentContext` needs no WIT file itself (it's built against the fully dynamic `component::Val` API), but the *component being compiled* does, since Rust needs it to generate typed bindings. [`src/test/rust/wasip2customtest/wit/world.wit`](src/test/rust/wasip2customtest/wit/world.wit):
+
+```wit
+package my:custom@1.0.0;
+
+interface greet {
+    hello: func(name: string) -> string;
+    add: func(a: u32, b: u32) -> u32;
+}
+
+world custom-world {
+    import greet;
+}
+```
+
+**2. Consume it from the guest.** Any language with Component Model tooling works; the test fixture is Rust using [`wit-bindgen`](https://github.com/bytecodealliance/wit-bindgen) (the only test fixture in this repo that needs it — every WASI-only fixture relies solely on `wasm32-wasip2`'s built-in componentization). [`src/test/rust/wasip2customtest/src/main.rs`](src/test/rust/wasip2customtest/src/main.rs):
+
+```rust
+wit_bindgen::generate!({
+    world: "custom-world",
+    path: "wit",
+});
+
+use my::custom::greet;
+
+fn main() {
+    let greeting = greet::hello("Wasmtime-Java");
+    println!("GREETING={}", greeting);
+
+    let sum = greet::add(19, 23);
+    println!("SUM={}", sum);
+}
+```
+
+**3. Implement `WasmComponentContext` in Java** to provide `hello`/`add`. [`GreetComponentContext`](src/test/java/io/github/stefanrichterhuber/wasmtimejavang/GreetComponentContext.java):
 
 ```java
-public class MyContext implements WasmComponentContext {
+public class GreetComponentContext implements WasmComponentContext {
+    private static final String INTERFACE = "my:custom/greet";
+
+    private SemanticVersion version = new SemanticVersion(1, 0, 0);
+
     @Override
-    public String name() { return "my-context"; } // stable id, referenced by getDependencies()
+    public String name() { return "greet"; } // stable id, referenced by getDependencies()
 
     @Override
     public List<ComponentImportFunction> getImportFunctions() {
-        return List.of(new ComponentImportFunction("my:custom/greet@1.0.0", "hello",
-                (instance, args) -> new Object[] { "Hello, " + args[0] }));
+        String versioned = INTERFACE + "@" + version;
+        return List.of(
+                new ComponentImportFunction(versioned, "hello", this::hello),
+                new ComponentImportFunction(versioned, "add", this::add));
     }
 
     @Override
     public List<ComponentImportResource> getImportResources() { return List.of(); }
 
     @Override
-    public WasmComponentContext withVersion(SemanticVersion version) { return this; }
+    public Set<String> getProvidedInterfaces() { return Set.of(INTERFACE); } // see "Auto-discovery" below
+
+    private Object[] hello(WasmtimeComponentInstance instance, Object... args) {
+        return new Object[] { "Hello, " + (String) args[0] + "!" };
+    }
+
+    private Object[] add(WasmtimeComponentInstance instance, Object... args) {
+        return new Object[] { (Integer) args[0] + (Integer) args[1] };
+    }
 
     @Override
-    public SemanticVersion getVersion() { return new SemanticVersion(1, 0, 0); }
+    public WasmComponentContext withVersion(SemanticVersion version) { this.version = version; return this; }
+
+    @Override
+    public SemanticVersion getVersion() { return version; }
 }
 ```
 
-Link it explicitly with `linker.linkContext(new MyContext())`. To depend on another context (e.g. to share `WasiIoContext`'s stream table), declare it by bare name in `getDependencies()` and resolve it in `onDependenciesResolved(ComponentContextLookup)` — `WasmtimeComponentLinker` links declared dependencies first and guarantees they're available by the time it's called:
+Argument/return types follow the value bridge described above — here just `String` and `Integer` (WIT `u32`), but the same context could just as well take/return a `Map` (`record`), `List`/`Object[]` (`list`/`tuple`), `byte[]` (`list<u8>`), or a resource.
+
+**4. Link it and run.** [`WasmtimeCustomComponentTest`](src/test/java/io/github/stefanrichterhuber/wasmtimejavang/WasmtimeCustomComponentTest.java):
+
+```java
+try (FileInputStream fis = new FileInputStream(wasmPath);
+        WasmtimeEngine engine = new WasmtimeEngine();
+        WasmtimeComponent component = new WasmtimeComponent(engine, fis);
+        WasmtimeStore store = new WasmtimeStore(engine);
+        WasmtimeComponentLinker linker = new WasmtimeComponentLinker(engine, store)) {
+
+    linker.linkContext(new WasiCliContext().withStdOut(System.out));
+    linker.linkContext(new GreetComponentContext());
+    linker.linkRequired(component); // pulls in wasi-io for stdout; nothing to do for "my:custom/greet"
+
+    try (WasmtimeComponentInstance instance = new WasmtimeComponentInstance(store, component, linker)) {
+        instance.asCliRunnable().call(); // prints "GREETING=Hello, Wasmtime-Java!" / "SUM=42"
+    }
+}
+```
+
+`linker.linkContext(...)` links a context explicitly and unconditionally; `linkRequired(component)` only fills in interfaces *nothing has already claimed* (see above), so the two compose freely — explicit calls always take precedence.
+
+**Depending on another context.** To share state with another context (e.g. `WasiIoContext`'s stream table), declare it by bare name in `getDependencies()` and resolve it in `onDependenciesResolved(ComponentContextLookup)` — `WasmtimeComponentLinker` links declared dependencies first and guarantees they're available by the time it's called:
 
 ```java
 @Override
@@ -337,7 +413,9 @@ public void onDependenciesResolved(ComponentContextLookup lookup) {
 }
 ```
 
-To make a context discoverable by `linkRequired(component)` instead of linking it explicitly, declare the (bare, version-independent) interface names it implements via `getProvidedInterfaces()` and register the class as a `WasmComponentContext` [`ServiceLoader`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/ServiceLoader.html) provider (a `META-INF/services/io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext` file listing the class, which needs a public no-arg constructor or a public static `provider()` method) — this is exactly how the four built-in `Wasi*Context` classes register themselves.
+**Auto-discovery.** To make a context discoverable by `linkRequired(component)` instead of linking it explicitly, declare the (bare, version-independent) interface names it implements via `getProvidedInterfaces()` (as `GreetComponentContext` already does above) and register the class as a `WasmComponentContext` [`ServiceLoader`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/ServiceLoader.html) provider (a `META-INF/services/io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext` file listing the class, which needs a public no-arg constructor or a public static `provider()` method) — this is exactly how the six built-in `Wasi*Context` classes register themselves.
+
+**Watch out:** `getProvidedInterfaces()` must be overridden even for a context that's *always* linked explicitly via `linkContext(...)` and never registered for `ServiceLoader` discovery — if that same call site also calls `linkRequired(...)` afterwards (as step 4 does), `linkRequired` has no other way to know the explicitly-linked context already satisfies the interface, and raises `IllegalStateException` for it. This is why `GreetComponentContext` overrides `getProvidedInterfaces()` above even though it's never meant to be auto-discovered.
 
 ### Overriding a built-in WASI Preview 2 context
 

@@ -1,0 +1,13 @@
+package my:custom@1.0.0;
+
+/// A small, deliberately non-WASI interface: this is what a Java application
+/// embedding wasmtime-java-ng would define itself to expose custom host
+/// functionality to a component, implemented via `WasmComponentContext`.
+interface greet {
+    hello: func(name: string) -> string;
+    add: func(a: u32, b: u32) -> u32;
+}
+
+world custom-world {
+    import greet;
+}
