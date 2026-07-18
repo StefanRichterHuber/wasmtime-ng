@@ -24,6 +24,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -42,10 +44,12 @@ public class WasmtimeWasiP2Test {
     private static final String SOCKET_WASM_PATH = "target/rust-test/wasip2sockettest/wasm32-wasip2/debug/wasip2sockettest.wasm";
     private static final String FILE_WASM_PATH = "target/rust-test/wasip2filetest/wasm32-wasip2/debug/wasip2filetest.wasm";
 
+    private static final Logger LOGGER = LogManager.getLogger();
+
     @Test
     public void wasip2test() throws Exception {
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
-
+        LOGGER.info("Started wasip2test");
         try (
                 FileInputStream fis = new FileInputStream(WASM_PATH);
                 WasmtimeEngine engine = new WasmtimeEngine();
@@ -80,6 +84,7 @@ public class WasmtimeWasiP2Test {
         String output = stdout.toString("UTF-8");
         assertTrue(output.contains("Hello, world!"), "stdout was: " + output);
         assertTrue(output.contains("Napped for"), "stdout was: " + output);
+        LOGGER.info("Stopped wasip2test");
     }
 
     /**
@@ -90,6 +95,7 @@ public class WasmtimeWasiP2Test {
      */
     @Test
     public void wasip2clitest() throws Exception {
+        LOGGER.info("Started wasip2clitest");
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         ByteArrayOutputStream stderr = new ByteArrayOutputStream();
         ByteArrayInputStream stdin = new ByteArrayInputStream("hello from a prepared stdin".getBytes("UTF-8"));
@@ -132,12 +138,13 @@ public class WasmtimeWasiP2Test {
 
         String errOutput = stderr.toString("UTF-8");
         assertTrue(errOutput.contains("stderr line from wasip2clitest"), "stderr was: " + errOutput);
+        LOGGER.info("Stopped wasip2clitest");
     }
 
     @Test
     public void wasip2randomtest() throws Exception {
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
-
+        LOGGER.info("Started wasip2randomtest");
         try (
                 FileInputStream fis = new FileInputStream(RANDOM_WASM_PATH);
                 WasmtimeEngine engine = new WasmtimeEngine();
@@ -162,6 +169,7 @@ public class WasmtimeWasiP2Test {
         String output = stdout.toString("UTF-8");
         assertTrue(output.contains("RANDOM BYTES="), "stdout was: " + output);
         assertTrue(output.contains("HASH MAP SIZE=2"), "stdout was: " + output);
+        LOGGER.info("Stopped wasip2randomtest");
     }
 
     /**
@@ -176,6 +184,7 @@ public class WasmtimeWasiP2Test {
     @Test
     public void wasip2filetest() throws Exception {
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+        LOGGER.info("Started wasip2filetest");
 
         try (FileSystem fs = Jimfs.newFileSystem(Configuration.unix().toBuilder()
                 .setAttributeViews("basic", "owner", "posix", "unix").build());
@@ -226,6 +235,8 @@ public class WasmtimeWasiP2Test {
         assertTrue(output.contains("Is dir: true"), "stdout was: " + output);
         assertTrue(output.contains("Correctly failed to escape sandbox"), "stdout was: " + output);
         assertTrue(output.contains("Done!"), "stdout was: " + output);
+
+        LOGGER.info("Stopped wasip2filetest");
     }
 
     /**
@@ -238,6 +249,7 @@ public class WasmtimeWasiP2Test {
     @Test
     @Disabled("No sockets for automated builds")
     public void wasip2sockettest() throws Exception {
+        LOGGER.info("Started wasip2sockettest");
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
 
         try (ServerSocket tcpServer = new ServerSocket(0);
@@ -298,5 +310,6 @@ public class WasmtimeWasiP2Test {
         assertTrue(output.contains("TCP received: Hello TCP from wasm"), "stdout was: " + output);
         assertTrue(output.contains("UDP received: Hello UDP from wasm"), "stdout was: " + output);
         assertTrue(output.contains("Done!"), "stdout was: " + output);
+        LOGGER.info("Stppped wasip2sockettest");
     }
 }
