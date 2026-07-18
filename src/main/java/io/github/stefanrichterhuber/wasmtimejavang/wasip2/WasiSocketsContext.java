@@ -15,6 +15,7 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1059,9 +1060,10 @@ public class WasiSocketsContext implements WasmComponentContext {
     protected Object[] resolveAddresses(WasmtimeComponentInstance instance, Object[] args) {
         String name = (String) args[1];
         try {
-            InetAddress[] resolved = InetAddress.getAllByName(name);
+            List<InetAddress> resolved = Arrays.stream(InetAddress.getAllByName(name))
+                    .filter(address -> !(address instanceof Inet6Address)).toList();
             int rep = nextRep.getAndIncrement();
-            resolveStreams.put(rep, List.of(resolved).iterator());
+            resolveStreams.put(rep, resolved.iterator());
             return okResult(WitResource.own("resolve-address-stream", rep));
         } catch (UnknownHostException e) {
             return errorResult("name-unresolvable");
