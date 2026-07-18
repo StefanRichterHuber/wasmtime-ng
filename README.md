@@ -56,7 +56,6 @@ Include the dependency into your project `pom.xml` (the published artifact conta
 </dependency>
 ```
 
-
 ### Function Imports
 
 You can import Java methods into the WebAssembly context, allowing WASM modules to invoke native Java code.

@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.jimfs.Configuration;
@@ -235,6 +236,7 @@ public class WasmtimeWasiP2Test {
      * ports before the component ever runs (passed in as CLI arguments).
      */
     @Test
+    @Disabled("No sockets for automated builds")
     public void wasip2sockettest() throws Exception {
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
 
