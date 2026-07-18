@@ -38,6 +38,12 @@ public class ServerSocketWasiFileDescriptor extends WasiFileDescriptor {
         }
     }
 
+    /**
+     * Accepts a connection
+     * 
+     * @return Socket client connection
+     * @throws Exception
+     */
     public Socket accept() throws Exception {
         return serverSocket.accept();
     }

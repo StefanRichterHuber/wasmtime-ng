@@ -26,6 +26,10 @@ public interface WasmContext {
 
     /**
      * Reprsents an imported memory definition
+     * 
+     * @param module The name of the module providing the memory.
+     * @param name   The name of the memory.
+     * @param memory The Java implementation of the memory.
      */
     public record Importmemory(String module, String name, WasmtimeSharedMemory memory) {
     }

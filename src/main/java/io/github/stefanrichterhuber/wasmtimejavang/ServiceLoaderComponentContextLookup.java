@@ -35,8 +35,7 @@ import java.util.ServiceLoader;
  * {@code META-INF/services/io.github.stefanrichterhuber.wasmtimejavang.ComponentContextLookup}
  * provider -- {@link WasmtimeComponentLinker} resolves its own dependency
  * lookup strategy the same SPI way, falling back to this class if none is
- * registered. See also {@link RegistryComponentContextLookup} for an explicit
- * alternative already provided by this library.
+ * registered.
  */
 public class ServiceLoaderComponentContextLookup implements ComponentContextLookup {
 

@@ -1,5 +1,13 @@
 package io.github.stefanrichterhuber.wasmtimejavang;
 
+/**
+ * 
+ * Represents a semantic version.
+ * 
+ * @param major Major version
+ * @param minor Minor version
+ * @param patch Patch version
+ */
 public record SemanticVersion(int major, int minor, int patch) implements Comparable<SemanticVersion> {
 
     @Override
@@ -16,6 +24,12 @@ public record SemanticVersion(int major, int minor, int patch) implements Compar
         return 0;
     }
 
+    /**
+     * Returns a string representation of the semantic version.
+     * 
+     * @return String representation of the semantic version in the format
+     *         major.minor.patch
+     */
     public String toString() {
         return major + "." + minor + "." + patch;
     }
@@ -24,8 +38,8 @@ public record SemanticVersion(int major, int minor, int patch) implements Compar
      * Parses a semantic version string.
      * Supports formats like 1.2.3, 1.2 (== 1.2.0) or 1 (== 1.0.0)
      *
-     * @param version
-     * @return
+     * @param version Version string to parse
+     * @return SemanticVersion object
      */
     public static SemanticVersion parse(String version) {
         if (version == null) {

@@ -22,8 +22,6 @@ import java.util.Optional;
  * provider, not calling a setter.
  *
  * @see ServiceLoaderComponentContextLookup the default strategy
- * @see RegistryComponentContextLookup an explicit, manually populated
- *      alternative
  */
 @FunctionalInterface
 public interface ComponentContextLookup {
@@ -42,7 +40,8 @@ public interface ComponentContextLookup {
      * interface, used by
      * {@link WasmtimeComponentLinker#linkRequired(WasmtimeComponent)}
      * to auto-link whatever a component actually needs. Unlike
-     * {@link #resolve(String)} (a context's own stable name), this matches
+     * {@link #resolve(String, SemanticVersion)} (a context's own stable name), this
+     * matches
      * against {@link WasmComponentContext#getProvidedInterfaces()}.
      * <br>
      * Not abstract: strategies that only support name-based resolution (e.g.
