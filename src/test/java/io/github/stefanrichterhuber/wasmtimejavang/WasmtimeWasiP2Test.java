@@ -249,7 +249,6 @@ public class WasmtimeWasiP2Test {
      * ports before the component ever runs (passed in as CLI arguments).
      */
     @Test
-    // @Disabled("No sockets for automated builds")
     public void wasip2sockettest() throws Exception {
         LOGGER.info("Started wasip2sockettest");
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
