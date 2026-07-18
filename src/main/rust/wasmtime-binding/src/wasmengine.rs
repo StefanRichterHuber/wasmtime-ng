@@ -93,6 +93,7 @@ impl JWasmtimeEngineNativeInterface for JWasmtimeEngineAPI {
         config.wasm_threads(true);
         config.wasm_bulk_memory(true);
         config.shared_memory(true);
+        config.wasm_component_model(true);
 
         match Engine::new(&config) {
             Ok(engine) => {

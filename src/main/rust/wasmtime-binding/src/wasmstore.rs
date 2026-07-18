@@ -11,12 +11,22 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use wasmtime::{AsContext, AsContextMut, Caller, Store, StoreContextMut};
 
-thread_local! {
-    /// Maps a `Store` raw pointer to a stack of active `Caller` pointers for this thread.
-    static ACTIVE_CALLERS: RefCell<HashMap<usize, Vec<*mut c_void>>> = RefCell::new(HashMap::new());
+/// A raw pointer to whatever borrow of the `Store` is currently active on this
+/// thread for re-entrancy purposes: either a core wasm `Caller` (defined via
+/// `Linker::define`) or a component `StoreContextMut` (defined via
+/// `component::LinkerInstance::func_new`). Both support `.as_context{,_mut}()`.
+#[derive(Copy, Clone)]
+enum ActiveCallerPtr {
+    Caller(*mut c_void),
+    StoreContext(*mut c_void),
 }
 
-/// A guard that registers a `Caller` in the thread-local storage for the duration of a JNI host call.
+thread_local! {
+    /// Maps a `Store` raw pointer to a stack of active caller pointers for this thread.
+    static ACTIVE_CALLERS: RefCell<HashMap<usize, Vec<ActiveCallerPtr>>> = RefCell::new(HashMap::new());
+}
+
+/// A guard that registers a `Caller`/`StoreContextMut` in the thread-local storage for the duration of a JNI host call.
 pub struct CallerGuard {
     store_ptr: usize,
 }
@@ -28,7 +38,25 @@ impl CallerGuard {
                 .borrow_mut()
                 .entry(store_ptr)
                 .or_default()
-                .push(caller as *mut _ as *mut c_void);
+                .push(ActiveCallerPtr::Caller(caller as *mut _ as *mut c_void));
+        });
+        Self { store_ptr }
+    }
+
+    /// Same as `new`, but for a component-model host call, which is handed a
+    /// `StoreContextMut` instead of a `Caller`.
+    pub fn new_from_store_context<'a>(
+        store_ptr: usize,
+        ctx: &mut StoreContextMut<'a, StoreContent>,
+    ) -> Self {
+        ACTIVE_CALLERS.with(|callers| {
+            callers
+                .borrow_mut()
+                .entry(store_ptr)
+                .or_default()
+                .push(ActiveCallerPtr::StoreContext(
+                    ctx as *mut _ as *mut c_void,
+                ));
         });
         Self { store_ptr }
     }
@@ -108,13 +136,21 @@ impl AsContext for StoreHandle {
                 .and_then(|stack| stack.last().copied())
         });
 
-        if let Some(caller_ptr) = active_caller {
-            // We are inside a host call for THIS store! Safely re-borrow the Caller.
-            let caller = unsafe { &*(caller_ptr as *const Caller<'_, StoreContent>) };
-            caller.as_context()
-        } else {
-            // Not in a host call, use the Store pointer directly.
-            unsafe { (&*self.0).into() }
+        match active_caller {
+            Some(ActiveCallerPtr::Caller(caller_ptr)) => {
+                // We are inside a core wasm host call for THIS store! Safely re-borrow the Caller.
+                let caller = unsafe { &*(caller_ptr as *const Caller<'_, StoreContent>) };
+                caller.as_context()
+            }
+            Some(ActiveCallerPtr::StoreContext(ctx_ptr)) => {
+                // We are inside a component host call for THIS store! Safely re-borrow the StoreContextMut.
+                let ctx = unsafe { &*(ctx_ptr as *const StoreContextMut<'_, StoreContent>) };
+                ctx.as_context()
+            }
+            None => {
+                // Not in a host call, use the Store pointer directly.
+                unsafe { (&*self.0).into() }
+            }
         }
     }
 }
@@ -129,13 +165,21 @@ impl AsContextMut for StoreHandle {
                 .and_then(|stack| stack.last().copied())
         });
 
-        if let Some(caller_ptr) = active_caller {
-            // We are inside a host call for THIS store! Safely re-borrow the Caller.
-            let caller = unsafe { &mut *(caller_ptr as *mut Caller<'_, StoreContent>) };
-            caller.as_context_mut()
-        } else {
-            // Not in a host call, use the Store pointer directly.
-            unsafe { (&mut *self.0).into() }
+        match active_caller {
+            Some(ActiveCallerPtr::Caller(caller_ptr)) => {
+                // We are inside a core wasm host call for THIS store! Safely re-borrow the Caller.
+                let caller = unsafe { &mut *(caller_ptr as *mut Caller<'_, StoreContent>) };
+                caller.as_context_mut()
+            }
+            Some(ActiveCallerPtr::StoreContext(ctx_ptr)) => {
+                // We are inside a component host call for THIS store! Safely re-borrow the StoreContextMut.
+                let ctx = unsafe { &mut *(ctx_ptr as *mut StoreContextMut<'_, StoreContent>) };
+                ctx.as_context_mut()
+            }
+            None => {
+                // Not in a host call, use the Store pointer directly.
+                unsafe { (&mut *self.0).into() }
+            }
         }
     }
 }

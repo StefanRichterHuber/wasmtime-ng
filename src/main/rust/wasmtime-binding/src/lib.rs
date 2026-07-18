@@ -1,5 +1,13 @@
 pub mod java_numbers;
+pub mod java_collections;
+pub mod java_maps;
+
+
 pub mod logging;
+pub mod wasmcomponent;
+pub mod wasmcomponentinstance;
+pub mod wasmcomponentlinker;
+pub mod wasmcomponentvalue;
 pub mod wasmcontext;
 pub mod wasmengine;
 pub mod wasmexception;

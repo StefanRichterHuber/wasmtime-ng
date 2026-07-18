@@ -170,7 +170,7 @@
                             <arguments>
                                 <argument>build</argument>
                                 <argument>--profile</argument>
-                                <!-- Always use dev, profile for faster build: its just a test -->
+                                <!-- Always use dev profile for faster build: its just a test -->
                                 <argument>dev</argument>
                                 <argument>--target</argument>
                                 <argument>wasm32-wasip1</argument>
@@ -195,7 +195,7 @@
                             <arguments>
                                 <argument>build</argument>
                                 <argument>--profile</argument>
-                                <!-- Always use dev, profile for faster build: its just a test -->
+                                <!-- Always use dev profile for faster build: its just a test -->
                                 <argument>dev</argument>
                                 <argument>--target</argument>
                                 <argument>wasm32-wasip1</argument>
@@ -220,7 +220,7 @@
                             <arguments>
                                 <argument>build</argument>
                                 <argument>--profile</argument>
-                                <!-- Always use dev, profile for faster build: its just a test -->
+                                <!-- Always use dev profile for faster build: its just a test -->
                                 <argument>dev</argument>
                                 <argument>--target</argument>
                                 <argument>wasm32-wasip1</argument>
@@ -248,7 +248,7 @@
                                 <argument>+nightly</argument>
                                 <argument>build</argument>
                                 <argument>--profile</argument>
-                                <!-- Always use dev, profile for faster build: its just a test -->
+                                <!-- Always use dev profile for faster build: its just a test -->
                                 <argument>dev</argument>
                                 <argument>--target</argument>
                                 <argument>wasm32-wasip1-threads</argument>
@@ -275,7 +275,7 @@
                             <arguments>
                                 <argument>build</argument>
                                 <argument>--profile</argument>
-                                <!-- Always use dev, profile for faster build: its just a test -->
+                                <!-- Always use dev profile for faster build: its just a test -->
                                 <argument>dev</argument>
                                 <argument>--target</argument>
                                 <argument>wasm32-wasip1</argument>
@@ -300,12 +300,162 @@
                             <arguments>
                                 <argument>build</argument>
                                 <argument>--profile</argument>
-                                <!-- Always use dev, profile for faster build: its just a test -->
+                                <!-- Always use dev profile for faster build: its just a test -->
                                 <argument>dev</argument>
                                 <argument>--target</argument>
                                 <argument>wasm32-wasip1</argument>
                                 <argument>--target-dir</argument>
                                 <argument>${project.build.directory}/rust-test/valuetest</argument>
+                            </arguments>
+                            <environmentVariables>
+                                <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                            </environmentVariables>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>build wasm test wasip2test</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>generate-test-resources</phase>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <workingDirectory>${project.basedir}/src/test/rust/wasip2test</workingDirectory>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--profile</argument>
+                                <!-- Always use dev profile for faster build: its just a test -->
+                                <argument>dev</argument>
+                                <argument>--target</argument>
+                                <argument>wasm32-wasip2</argument>
+                                <argument>--target-dir</argument>
+                                <argument>${project.build.directory}/rust-test/wasip2test</argument>
+                            </arguments>
+                            <environmentVariables>
+                                <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                            </environmentVariables>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>build wasm test wasip2clitest</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>generate-test-resources</phase>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <workingDirectory>${project.basedir}/src/test/rust/wasip2clitest</workingDirectory>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--profile</argument>
+                                <!-- Always use dev profile for faster build: its just a test -->
+                                <argument>dev</argument>
+                                <argument>--target</argument>
+                                <argument>wasm32-wasip2</argument>
+                                <argument>--target-dir</argument>
+                                <argument>${project.build.directory}/rust-test/wasip2clitest</argument>
+                            </arguments>
+                            <environmentVariables>
+                                <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                            </environmentVariables>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>build wasm test wasip2randomtest</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>generate-test-resources</phase>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <workingDirectory>${project.basedir}/src/test/rust/wasip2randomtest</workingDirectory>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--profile</argument>
+                                <!-- Always use dev profile for faster build: its just a test -->
+                                <argument>dev</argument>
+                                <argument>--target</argument>
+                                <argument>wasm32-wasip2</argument>
+                                <argument>--target-dir</argument>
+                                <argument>${project.build.directory}/rust-test/wasip2randomtest</argument>
+                            </arguments>
+                            <environmentVariables>
+                                <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                            </environmentVariables>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>build wasm test wasip2filetest</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>generate-test-resources</phase>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <workingDirectory>${project.basedir}/src/test/rust/wasip2filetest</workingDirectory>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--profile</argument>
+                                <!-- Always use dev profile for faster build: its just a test -->
+                                <argument>dev</argument>
+                                <argument>--target</argument>
+                                <argument>wasm32-wasip2</argument>
+                                <argument>--target-dir</argument>
+                                <argument>${project.build.directory}/rust-test/wasip2filetest</argument>
+                            </arguments>
+                            <environmentVariables>
+                                <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                            </environmentVariables>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>build wasm test wasip2customtest</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>generate-test-resources</phase>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <workingDirectory>${project.basedir}/src/test/rust/wasip2customtest</workingDirectory>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--profile</argument>
+                                <!-- Always use dev profile for faster build: its just a test -->
+                                <argument>dev</argument>
+                                <argument>--target</argument>
+                                <argument>wasm32-wasip2</argument>
+                                <argument>--target-dir</argument>
+                                <argument>${project.build.directory}/rust-test/wasip2customtest</argument>
+                            </arguments>
+                            <environmentVariables>
+                                <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                            </environmentVariables>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>build wasm test wasip2sockettest</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>generate-test-resources</phase>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <workingDirectory>${project.basedir}/src/test/rust/wasip2sockettest</workingDirectory>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--profile</argument>
+                                <!-- Always use dev profile for faster build: its just a test -->
+                                <argument>dev</argument>
+                                <argument>--target</argument>
+                                <argument>wasm32-wasip2</argument>
+                                <argument>--target-dir</argument>
+                                <argument>${project.build.directory}/rust-test/wasip2sockettest</argument>
                             </arguments>
                             <environmentVariables>
                                 <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>

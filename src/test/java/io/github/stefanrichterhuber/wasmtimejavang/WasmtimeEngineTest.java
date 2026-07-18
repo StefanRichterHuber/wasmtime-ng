@@ -3,12 +3,14 @@ package io.github.stefanrichterhuber.wasmtimejavang;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -86,6 +88,7 @@ public class WasmtimeEngineTest {
 
     @Test
     public void testCreateInstance() throws Exception {
+        AtomicBoolean called = new AtomicBoolean(false);
         try (
                 WasmtimeEngine engine = new WasmtimeEngine();
                 WasmtimeModule module = new WasmtimeModule(engine, wat);
@@ -95,19 +98,23 @@ public class WasmtimeEngineTest {
         ) {
             // Add a java native function which the wasm runtime can call
             linker.linkFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
-                LOGGER.info("Function env::hello called");
+                called.set(true);
                 return new Object[] { 0 };
             });
 
             // Call the exported function 'run'
             try (WasmtimeInstance instance = new WasmtimeInstance(store, module, linker)) {
+                Object[] result = instance.invoke("run");
+                assertNotNull(result);
             }
 
         }
+        assertTrue(called.get());
     }
 
     @Test
     public void testInvokeFunction() throws Exception {
+        AtomicBoolean called = new AtomicBoolean(false);
         try (
                 WasmtimeEngine engine = new WasmtimeEngine();
                 WasmtimeModule module = new WasmtimeModule(engine, wat);
@@ -117,7 +124,9 @@ public class WasmtimeEngineTest {
         ) {
             store.getContext().put("greeting", "Hello world");
             linker.linkFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
-                LOGGER.info("Function env::hello called with greeting: " + instance.getContext().get("greeting"));
+                if (instance.getContext().get("greeting").equals("Hello world")) {
+                    called.set(true);
+                }
                 return new Object[] {};
             });
 
@@ -127,6 +136,7 @@ public class WasmtimeEngineTest {
             }
 
         }
+        assertTrue(called.get());
     }
 
     /**
@@ -134,6 +144,7 @@ public class WasmtimeEngineTest {
      */
     @Test
     public void testExportFunction() throws Exception {
+        AtomicBoolean called = new AtomicBoolean(false);
         try (
                 WasmtimeEngine engine = new WasmtimeEngine();
                 WasmtimeModule module = new WasmtimeModule(engine, wat);
@@ -143,7 +154,9 @@ public class WasmtimeEngineTest {
         ) {
             store.getContext().put("greeting", "Hello world");
             linker.linkFunction("env", "hello", List.of(), List.of(), (instance, params) -> {
-                LOGGER.info("Function env::hello called with greeting: " + instance.getContext().get("greeting"));
+                if (instance.getContext().get("greeting").equals("Hello world")) {
+                    called.set(true);
+                }
                 return new Object[] {};
             });
 
@@ -154,6 +167,7 @@ public class WasmtimeEngineTest {
             }
 
         }
+        assertTrue(called.get());
     }
 
     @Test

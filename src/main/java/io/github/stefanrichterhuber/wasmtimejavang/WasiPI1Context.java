@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import io.github.stefanrichterhuber.wasmtimejavang.internal.PathSandbox;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.DirectoryWasiFileDescriptor;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.FileWasiFileDescriptor;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.NoOpInputStream;
@@ -110,11 +112,14 @@ public class WasiPI1Context implements WasmContext {
     private OutputStream stderr = new NoOpOutputStream();
 
     /**
-     * The random number generator used for random_get.
+     * The random number generator used for random_get. Defaults to a
+     * {@link SecureRandom} since WASI's random_get is specified to be usable for
+     * cryptographic purposes; override via {@link #withRandom(Random)} if a
+     * predictable generator is needed (e.g. for deterministic tests).
      * <br>
      * Thread safety: Read-only after start
      */
-    private Random random = new Random();
+    private Random random = new SecureRandom();
 
     /**
      * Maps directory paths within the WASM client to Path objects on the host
@@ -156,22 +161,7 @@ public class WasiPI1Context implements WasmContext {
         WasiFileDescriptor wfd = fds.get(fd);
         if (wfd == null)
             return null;
-        Path base = wfd.getPath();
-        if (base == null)
-            return null;
-        if (path.isEmpty() || path.equals("."))
-            return base;
-
-        // Ensure the path is resolved and normalized within the base directory to
-        // prevent path traversal
-        Path resolved = base.resolve(path).normalize().toAbsolutePath();
-        Path absoluteBase = base.normalize().toAbsolutePath();
-
-        if (resolved.startsWith(absoluteBase)) {
-            return resolved;
-        } else {
-            return null;
-        }
+        return PathSandbox.resolve(wfd.getPath(), path);
     }
 
     /**
@@ -347,7 +337,7 @@ public class WasiPI1Context implements WasmContext {
      * @param stdout The stdout stream.
      * @return This context.
      */
-    public WasiPI1Context withStdOut(OutputStream stdout) {
+    public synchronized WasiPI1Context withStdOut(OutputStream stdout) {
         this.stdout = stdout;
         return this;
     }
@@ -358,7 +348,7 @@ public class WasiPI1Context implements WasmContext {
      * @param stderr The stderr stream.
      * @return This context.
      */
-    public WasiPI1Context withStdErr(OutputStream stderr) {
+    public synchronized WasiPI1Context withStdErr(OutputStream stderr) {
         this.stderr = stderr;
         return this;
     }
@@ -369,7 +359,7 @@ public class WasiPI1Context implements WasmContext {
      * @param stdin The stdin stream.
      * @return This context.
      */
-    public WasiPI1Context withStdIn(InputStream stdin) {
+    public synchronized WasiPI1Context withStdIn(InputStream stdin) {
         this.stdin = stdin;
         return this;
     }
@@ -875,7 +865,7 @@ public class WasiPI1Context implements WasmContext {
      * @return An array of return values.
      */
     protected Object[] procExit(WasmtimeInstance instance, Object[] args) {
-        LOGGER.debug("Wasm program called proc_exit with status code {}", (int) args[0]);
+        LOGGER.debug("Wasm program called proc_exit with status code {}", args[0]);
         throw new ProcExitException((int) args[0]);
     }
 
@@ -1572,10 +1562,16 @@ public class WasiPI1Context implements WasmContext {
                 getStdCharset());
         final String newPathStr = memory.readString(new_path_ptr, new_path_len,
                 getStdCharset());
-        final Path oldPath = Paths.get(oldPathStr);
         final Path newPath = resolvePath(fd, newPathStr);
         if (newPath == null)
             return new Object[] { WasiErrno.BADF };
+        // The symlink target must also stay within the sandbox: otherwise a guest
+        // could plant a link here whose target escapes it, and later path_open
+        // calls that follow the link would read/write outside the sandbox even
+        // though PathSandbox only ever validates the link's own path lexically.
+        if (resolvePath(fd, oldPathStr) == null)
+            return new Object[] { WasiErrno.BADF };
+        final Path oldPath = Paths.get(oldPathStr);
         try {
             Files.createSymbolicLink(newPath, oldPath);
             return new Object[] { WasiErrno.SUCCESS };

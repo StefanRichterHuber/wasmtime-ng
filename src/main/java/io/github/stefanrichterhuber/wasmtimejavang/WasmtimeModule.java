@@ -155,7 +155,7 @@ public final class WasmtimeModule implements AutoCloseable {
      */
     static ByteBuffer createByteBuffer(ByteBuffer source) {
         if (!source.isDirect()) {
-            LOGGER.info(
+            LOGGER.debug(
                     "Only direct ByteBuffers could be directly move to the runtime, all others have to be copied in to a direct ByteBuffer");
 
             final ByteBuffer directByteBuffer = ByteBuffer.allocateDirect(source.capacity());
