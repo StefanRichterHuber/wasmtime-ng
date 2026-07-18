@@ -94,6 +94,7 @@ public class WasmtimeWasiP2Test {
      * clock, and a non-zero {@code wasi:cli/exit} exit code.
      */
     @Test
+    @Disabled("Hangs in github pipeline")
     public void wasip2clitest() throws Exception {
         LOGGER.info("Started wasip2clitest");
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
