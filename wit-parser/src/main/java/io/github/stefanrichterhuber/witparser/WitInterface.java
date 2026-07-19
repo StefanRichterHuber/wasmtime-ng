@@ -7,8 +7,11 @@ import java.util.List;
  * A single WIT interface resolved from a {@code .wit} file, as returned by
  * {@link WitParser#parse(java.nio.file.Path)}.
  *
- * @param name      Interface name, as declared in the WIT source (e.g.
- *                  {@code "greet"} for {@code interface greet { ... }}).
+ * @param name      Fully-qualified, bare (version-independent) interface
+ *                  name (e.g. {@code "my:custom/greet"} for
+ *                  {@code package my:custom; interface greet { ... }}) --
+ *                  the same form {@code WasmComponentContext.getProvidedInterfaces()}
+ *                  uses.
  * @param functions The interface's functions, in declaration order.
  */
 public record WitInterface(String name, List<WitFunction> functions) {

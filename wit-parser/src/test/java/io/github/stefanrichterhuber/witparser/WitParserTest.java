@@ -22,7 +22,7 @@ class WitParserTest {
 
         assertEquals(1, interfaces.size());
         WitInterface greet = interfaces.get(0);
-        assertEquals("greet", greet.name());
+        assertEquals("my:custom/greet", greet.name());
         assertEquals(2, greet.functions().size());
 
         WitFunction hello = greet.functions().get(0);

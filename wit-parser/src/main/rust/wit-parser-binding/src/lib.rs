@@ -92,6 +92,7 @@ fn parse_wit_source(path: &str) -> anyhow::Result<Vec<ParsedInterface>> {
     let mut resolve = Resolve::default();
     let package_id = resolve.push_source(path, &contents)?;
     let package = &resolve.packages[package_id];
+    let package_prefix = format!("{}:{}", package.name.namespace, package.name.name);
 
     let mut interfaces = Vec::new();
     for (iface_name, iface_id) in &package.interfaces {
@@ -113,7 +114,7 @@ fn parse_wit_source(path: &str) -> anyhow::Result<Vec<ParsedInterface>> {
             });
         }
         interfaces.push(ParsedInterface {
-            name: iface_name.clone(),
+            name: format!("{package_prefix}/{iface_name}"),
             functions,
         });
     }
