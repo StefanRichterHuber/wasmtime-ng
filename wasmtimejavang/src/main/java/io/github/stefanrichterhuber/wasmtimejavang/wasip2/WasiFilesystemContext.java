@@ -16,6 +16,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -29,10 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.github.stefanrichterhuber.wasmtimejavang.ComponentContextLookup;
-import io.github.stefanrichterhuber.wasmtimejavang.ComponentFunction;
-import io.github.stefanrichterhuber.wasmtimejavang.ResourceDestructor;
 import io.github.stefanrichterhuber.wasmtimejavang.SemanticVersion;
-import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitEnum;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
@@ -40,11 +38,17 @@ import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
 import io.github.stefanrichterhuber.wasmtimejavang.internal.PathSandbox;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.WasiFileType;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.PreopensContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TypesContext;
 
 /**
  * Implementation of {@code wasi:filesystem/types} and
  * {@code wasi:filesystem/preopens} (WASI Preview 2, 0.2.6) -- the
  * {@code "wasi-filesystem"} component context.
+ * <br>
+ * Implements both generated interfaces at once (see {@link WasiRandomContext}
+ * for why this works and how {@code getImportFunctions()}/
+ * {@code getImportResources()}/{@code getProvidedInterfaces()} get combined).
  * <br>
  * Structured like the WASI Preview 1 filesystem support
  * ({@code io.github.stefanrichterhuber.wasmtimejavang.WasiPI1Context} +
@@ -69,22 +73,25 @@ import io.github.stefanrichterhuber.wasmtimejavang.wasip1.WasiFileType;
  * <br>
  * Symlinks are not supported: {@code path-flags.symlink-follow} is ignored
  * (host paths are always resolved following symlinks, matching the JDK
- * default), and there is no {@code symlink-at}/{@code readlink-at} -- WASI
- * components don't require them to run, and sandboxed filesystems like
- * JimFS have inconsistent symlink support, so this is documented as
- * unsupported rather than implemented on uncertain footing.
+ * default), and {@code symlink-at}/{@code readlink-at} report {@code
+ * unsupported} -- WASI components don't require them to run, and sandboxed
+ * filesystems like JimFS have inconsistent symlink support, so this is
+ * documented as unsupported rather than implemented on uncertain footing.
+ * {@code filesystem-error-code} always reports {@code Optional.empty()} for
+ * the same reason {@link WasiIoContext#errorToDebugString} has no real
+ * message to give: no {@code error} resource this implementation hands out
+ * ever carries real failure metadata.
  */
-public class WasiFilesystemContext implements WasmComponentContext {
+public class WasiFilesystemContext implements TypesContext, PreopensContext {
 
     /** The stable name other contexts reference via {@code getDependencies()}. */
     public static final String NAME = "wasi-filesystem";
 
-    private static final String WASI_FILESYSTEM_TYPES = "wasi:filesystem/types";
-    private static final String WASI_FILESYSTEM_PREOPENS = "wasi:filesystem/preopens";
-    private static final Set<String> PROVIDED_INTERFACES = Set.of(WASI_FILESYSTEM_TYPES, WASI_FILESYSTEM_PREOPENS);
-
     private static final String RESOURCE_DESCRIPTOR = "descriptor";
     private static final String RESOURCE_DIRECTORY_ENTRY_STREAM = "directory-entry-stream";
+
+    /** Upper bound on how many bytes a single {@code descriptor.read} call returns. */
+    private static final int MAX_READ_CHUNK = 65536;
 
     private SemanticVersion version = SemanticVersion.parse("0.2.6");
 
@@ -200,7 +207,10 @@ public class WasiFilesystemContext implements WasmComponentContext {
 
     @Override
     public Set<String> getProvidedInterfaces() {
-        return PROVIDED_INTERFACES;
+        Set<String> result = new LinkedHashSet<>();
+        result.addAll(TypesContext.super.getProvidedInterfaces());
+        result.addAll(PreopensContext.super.getProvidedInterfaces());
+        return result;
     }
 
     @Override
@@ -219,55 +229,21 @@ public class WasiFilesystemContext implements WasmComponentContext {
     @Override
     public List<ComponentImportFunction> getImportFunctions() {
         List<ComponentImportFunction> result = new ArrayList<>();
-        String types = WASI_FILESYSTEM_TYPES + "@" + version;
-        String preopens = WASI_FILESYSTEM_PREOPENS + "@" + version;
-
-        result.add(func(types, "[method]descriptor.read-via-stream", this::readViaStream));
-        result.add(func(types, "[method]descriptor.write-via-stream", this::writeViaStream));
-        result.add(func(types, "[method]descriptor.append-via-stream", this::appendViaStream));
-        result.add(func(types, "[method]descriptor.get-flags", this::getFlags));
-        result.add(func(types, "[method]descriptor.set-size", this::setSize));
-        result.add(func(types, "[method]descriptor.set-times", this::setTimes));
-        result.add(func(types, "[method]descriptor.read-directory", this::readDirectory));
-        result.add(func(types, "[method]descriptor.sync", this::sync));
-        result.add(func(types, "[method]descriptor.create-directory-at", this::createDirectoryAt));
-        result.add(func(types, "[method]descriptor.stat", this::stat));
-        result.add(func(types, "[method]descriptor.stat-at", this::statAt));
-        result.add(func(types, "[method]descriptor.link-at", this::linkAt));
-        result.add(func(types, "[method]descriptor.open-at", this::openAt));
-        result.add(func(types, "[method]descriptor.remove-directory-at", this::removeDirectoryAt));
-        result.add(func(types, "[method]descriptor.rename-at", this::renameAt));
-        result.add(func(types, "[method]descriptor.unlink-file-at", this::unlinkFileAt));
-        result.add(func(types, "[method]descriptor.metadata-hash", this::metadataHash));
-        result.add(func(types, "[method]descriptor.metadata-hash-at", this::metadataHashAt));
-        result.add(func(types, "[method]directory-entry-stream.read-directory-entry", this::readDirectoryEntry));
-
-        result.add(func(preopens, "get-directories", this::getDirectories));
+        result.addAll(TypesContext.super.getImportFunctions());
+        result.addAll(PreopensContext.super.getImportFunctions());
         return result;
     }
 
     @Override
     public List<ComponentImportResource> getImportResources() {
-        String types = WASI_FILESYSTEM_TYPES + "@" + version;
-        String preopens = WASI_FILESYSTEM_PREOPENS + "@" + version;
-        return List.of(
-                resource(types, RESOURCE_DESCRIPTOR, this::dropDescriptor),
-                resource(types, RESOURCE_DIRECTORY_ENTRY_STREAM, this::dropDirectoryStream),
-                resource(types, "input-stream", io::dropInputStream),
-                resource(types, "output-stream", io::dropOutputStream),
-                resource(preopens, RESOURCE_DESCRIPTOR, this::dropDescriptor));
+        List<ComponentImportResource> result = new ArrayList<>();
+        result.addAll(TypesContext.super.getImportResources());
+        result.addAll(PreopensContext.super.getImportResources());
+        return result;
     }
 
-    private static ComponentImportFunction func(String interfaceName, String funcName, ComponentFunction function) {
-        return new ComponentImportFunction(interfaceName, funcName, function);
-    }
-
-    private static ComponentImportResource resource(String interfaceName, String resourceName,
-            ResourceDestructor destructor) {
-        return new ComponentImportResource(interfaceName, resourceName, destructor);
-    }
-
-    private void dropDescriptor(int rep) {
+    @Override
+    public void dropDescriptor(int rep) {
         DescriptorEntry entry = descriptors.remove(rep);
         if (entry != null && entry.channel != null) {
             try {
@@ -278,16 +254,33 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    private void dropDirectoryStream(int rep) {
+    @Override
+    public void dropDirectoryEntryStream(int rep) {
         dirStreams.remove(rep);
     }
 
-    private static Object[] okResult(Object value) {
-        return new Object[] { WitResult.ok(value) };
+    @Override
+    public void dropInputStream(int rep) {
+        io.dropInputStream(rep);
     }
 
-    private static Object[] errorResult(String errorCode) {
-        return new Object[] { WitResult.err(new WitEnum(errorCode)) };
+    @Override
+    public void dropOutputStream(int rep) {
+        io.dropOutputStream(rep);
+    }
+
+    @Override
+    public void dropError(int rep) {
+        // Same as WasiIoContext#dropError: no real "error" resource is ever
+        // constructed by this implementation.
+    }
+
+    private static WitResult okResult(Object value) {
+        return WitResult.ok(value);
+    }
+
+    private static WitResult errorResult(String errorCode) {
+        return WitResult.err(new WitEnum(errorCode));
     }
 
     private static String descriptorTypeName(int wasiFileType) {
@@ -352,14 +345,8 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static Set<String> flagsOf(Object arg) {
-        return (Set<String>) arg;
-    }
-
-    protected Object[] readViaStream(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        long offset = (Long) args[1];
+    @Override
+    public WitResult descriptorReadViaStream(WasmtimeComponentInstance instance, WitResource self, long offset) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null || entry.directory) {
             return errorResult("is-directory");
@@ -371,9 +358,8 @@ public class WasiFilesystemContext implements WasmComponentContext {
         return okResult(WitResource.own("input-stream", rep));
     }
 
-    protected Object[] writeViaStream(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        long offset = (Long) args[1];
+    @Override
+    public WitResult descriptorWriteViaStream(WasmtimeComponentInstance instance, WitResource self, long offset) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null || entry.directory) {
             return errorResult("is-directory");
@@ -385,8 +371,8 @@ public class WasiFilesystemContext implements WasmComponentContext {
         return okResult(WitResource.own("output-stream", rep));
     }
 
-    protected Object[] appendViaStream(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult descriptorAppendViaStream(WasmtimeComponentInstance instance, WitResource self) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null || entry.directory) {
             return errorResult("is-directory");
@@ -398,8 +384,43 @@ public class WasiFilesystemContext implements WasmComponentContext {
         return okResult(WitResource.own("output-stream", rep));
     }
 
-    protected Object[] getFlags(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    /**
+     * {@code advise} is purely a performance hint (the POSIX {@code
+     * posix_fadvise} equivalent) with no {@link FileChannel} counterpart, so
+     * this validates the descriptor and otherwise does nothing.
+     */
+    @Override
+    public WitResult descriptorAdvise(WasmtimeComponentInstance instance, WitResource self, long offset, long length,
+            WitEnum advice) {
+        DescriptorEntry entry = descriptors.get(self.rep());
+        if (entry == null) {
+            return errorResult("bad-descriptor");
+        }
+        return okResult(null);
+    }
+
+    /**
+     * Data-only variant of {@link #descriptorSync} ({@code fdatasync} vs.
+     * {@code fsync}).
+     */
+    @Override
+    public WitResult descriptorSyncData(WasmtimeComponentInstance instance, WitResource self) {
+        DescriptorEntry entry = descriptors.get(self.rep());
+        if (entry == null) {
+            return errorResult("bad-descriptor");
+        }
+        if (entry.channel != null) {
+            try {
+                entry.channel.force(false);
+            } catch (IOException e) {
+                return errorResult("io");
+            }
+        }
+        return okResult(null);
+    }
+
+    @Override
+    public WitResult descriptorGetFlags(WasmtimeComponentInstance instance, WitResource self) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null) {
             return errorResult("bad-descriptor");
@@ -414,9 +435,22 @@ public class WasiFilesystemContext implements WasmComponentContext {
         return okResult(flags);
     }
 
-    protected Object[] setSize(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        long size = (Long) args[1];
+    @Override
+    public WitResult descriptorGetType(WasmtimeComponentInstance instance, WitResource self) {
+        DescriptorEntry entry = descriptors.get(self.rep());
+        if (entry == null) {
+            return errorResult("bad-descriptor");
+        }
+        try {
+            BasicFileAttributes attrs = Files.readAttributes(entry.path, BasicFileAttributes.class);
+            return okResult(new WitEnum(descriptorTypeName(WasiFileType.getWasiFileType(attrs))));
+        } catch (IOException e) {
+            return errorResult("io");
+        }
+    }
+
+    @Override
+    public WitResult descriptorSetSize(WasmtimeComponentInstance instance, WitResource self, long size) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null || entry.directory) {
             return errorResult("is-directory");
@@ -429,17 +463,16 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] setTimes(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        WitVariant accessTimestamp = (WitVariant) args[1];
-        WitVariant modificationTimestamp = (WitVariant) args[2];
+    @Override
+    public WitResult descriptorSetTimes(WasmtimeComponentInstance instance, WitResource self,
+            WitVariant dataAccessTimestamp, WitVariant dataModificationTimestamp) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null) {
             return errorResult("bad-descriptor");
         }
         try {
-            Optional<FileTime> atim = resolveTimestamp(accessTimestamp);
-            Optional<FileTime> mtim = resolveTimestamp(modificationTimestamp);
+            Optional<FileTime> atim = resolveTimestamp(dataAccessTimestamp);
+            Optional<FileTime> mtim = resolveTimestamp(dataModificationTimestamp);
             if (atim.isPresent()) {
                 Files.setAttribute(entry.path, "lastAccessTime", atim.get());
             }
@@ -452,8 +485,56 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] readDirectory(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    /**
+     * Positional (pread-style) read directly on the descriptor, independent
+     * of any {@code read-via-stream} stream's own cursor.
+     */
+    @Override
+    public WitResult descriptorRead(WasmtimeComponentInstance instance, WitResource self, long length, long offset) {
+        DescriptorEntry entry = descriptors.get(self.rep());
+        if (entry == null || entry.directory) {
+            return errorResult("is-directory");
+        }
+        if (!entry.canRead) {
+            return errorResult("not-permitted");
+        }
+        try {
+            int toRead = (int) Math.min(length, MAX_READ_CHUNK);
+            ByteBuffer buffer = ByteBuffer.allocate(toRead);
+            int n = entry.channel.read(buffer, offset);
+            byte[] data = n > 0 ? Arrays.copyOf(buffer.array(), n) : new byte[0];
+            boolean eof = n < 0 || offset + Math.max(n, 0) >= entry.channel.size();
+            return okResult(new Object[] { data, eof });
+        } catch (IOException e) {
+            return errorResult("io");
+        }
+    }
+
+    /**
+     * Positional (pwrite-style) write directly on the descriptor, independent
+     * of any {@code write-via-stream}/{@code append-via-stream} stream's own
+     * cursor.
+     */
+    @Override
+    public WitResult descriptorWrite(WasmtimeComponentInstance instance, WitResource self, byte[] buffer,
+            long offset) {
+        DescriptorEntry entry = descriptors.get(self.rep());
+        if (entry == null || entry.directory) {
+            return errorResult("is-directory");
+        }
+        if (!entry.canWrite) {
+            return errorResult("not-permitted");
+        }
+        try {
+            int n = entry.channel.write(ByteBuffer.wrap(buffer), offset);
+            return okResult((long) Math.max(n, 0));
+        } catch (IOException e) {
+            return errorResult("io");
+        }
+    }
+
+    @Override
+    public WitResult descriptorReadDirectory(WasmtimeComponentInstance instance, WitResource self) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null || !entry.directory) {
             return errorResult("not-directory");
@@ -473,8 +554,8 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] readDirectoryEntry(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult directoryEntryStreamReadDirectoryEntry(WasmtimeComponentInstance instance, WitResource self) {
         Iterator<Path> it = dirStreams.get(self.rep());
         if (it == null) {
             return errorResult("bad-descriptor");
@@ -494,8 +575,8 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] sync(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult descriptorSync(WasmtimeComponentInstance instance, WitResource self) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null) {
             return errorResult("bad-descriptor");
@@ -510,14 +591,13 @@ public class WasiFilesystemContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] createDirectoryAt(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        String pathStr = (String) args[1];
+    @Override
+    public WitResult descriptorCreateDirectoryAt(WasmtimeComponentInstance instance, WitResource self, String path) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null || !entry.directory) {
             return errorResult("not-directory");
         }
-        Path resolved = PathSandbox.resolve(entry.path, pathStr);
+        Path resolved = PathSandbox.resolve(entry.path, path);
         if (resolved == null) {
             return errorResult("access");
         }
@@ -531,8 +611,8 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] stat(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult descriptorStat(WasmtimeComponentInstance instance, WitResource self) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null) {
             return errorResult("bad-descriptor");
@@ -540,21 +620,21 @@ public class WasiFilesystemContext implements WasmComponentContext {
         return statPath(entry.path);
     }
 
-    protected Object[] statAt(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        String pathStr = (String) args[2];
+    @Override
+    public WitResult descriptorStatAt(WasmtimeComponentInstance instance, WitResource self, Set<String> pathFlags,
+            String path) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null || !entry.directory) {
             return errorResult("not-directory");
         }
-        Path resolved = PathSandbox.resolve(entry.path, pathStr);
+        Path resolved = PathSandbox.resolve(entry.path, path);
         if (resolved == null) {
             return errorResult("access");
         }
         return statPath(resolved);
     }
 
-    private static Object[] statPath(Path path) {
+    private static WitResult statPath(Path path) {
         try {
             BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class);
             return okResult(buildDescriptorStat(attrs));
@@ -565,24 +645,47 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] linkAt(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        String oldPathStr = (String) args[2];
-        WitResource newDescriptor = (WitResource) args[3];
-        String newPathStr = (String) args[4];
+    @Override
+    public WitResult descriptorSetTimesAt(WasmtimeComponentInstance instance, WitResource self,
+            Set<String> pathFlags, String path, WitVariant dataAccessTimestamp, WitVariant dataModificationTimestamp) {
+        DescriptorEntry entry = descriptors.get(self.rep());
+        if (entry == null || !entry.directory) {
+            return errorResult("not-directory");
+        }
+        Path resolved = PathSandbox.resolve(entry.path, path);
+        if (resolved == null) {
+            return errorResult("access");
+        }
+        try {
+            Optional<FileTime> atim = resolveTimestamp(dataAccessTimestamp);
+            Optional<FileTime> mtim = resolveTimestamp(dataModificationTimestamp);
+            if (atim.isPresent()) {
+                Files.setAttribute(resolved, "lastAccessTime", atim.get());
+            }
+            if (mtim.isPresent()) {
+                Files.setAttribute(resolved, "lastModifiedTime", mtim.get());
+            }
+            return okResult(null);
+        } catch (IOException e) {
+            return errorResult("io");
+        }
+    }
 
+    @Override
+    public WitResult descriptorLinkAt(WasmtimeComponentInstance instance, WitResource self, Set<String> oldPathFlags,
+            String oldPath, WitResource newDescriptor, String newPath) {
         DescriptorEntry oldEntry = descriptors.get(self.rep());
         DescriptorEntry newEntry = descriptors.get(newDescriptor.rep());
         if (oldEntry == null || newEntry == null || !oldEntry.directory || !newEntry.directory) {
             return errorResult("not-directory");
         }
-        Path oldPath = PathSandbox.resolve(oldEntry.path, oldPathStr);
-        Path newPath = PathSandbox.resolve(newEntry.path, newPathStr);
-        if (oldPath == null || newPath == null) {
+        Path oldPathResolved = PathSandbox.resolve(oldEntry.path, oldPath);
+        Path newPathResolved = PathSandbox.resolve(newEntry.path, newPath);
+        if (oldPathResolved == null || newPathResolved == null) {
             return errorResult("access");
         }
         try {
-            Files.createLink(newPath, oldPath);
+            Files.createLink(newPathResolved, oldPathResolved);
             return okResult(null);
         } catch (FileAlreadyExistsException e) {
             return errorResult("exist");
@@ -591,17 +694,14 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] openAt(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        String pathStr = (String) args[2];
-        Set<String> openFlags = flagsOf(args[3]);
-        Set<String> descriptorFlags = flagsOf(args[4]);
-
+    @Override
+    public WitResult descriptorOpenAt(WasmtimeComponentInstance instance, WitResource self, Set<String> pathFlags,
+            String path, Set<String> openFlags, Set<String> flags) {
         DescriptorEntry base = descriptors.get(self.rep());
         if (base == null || !base.directory) {
             return errorResult("not-directory");
         }
-        Path resolved = PathSandbox.resolve(base.path, pathStr);
+        Path resolved = PathSandbox.resolve(base.path, path);
         if (resolved == null) {
             return errorResult("access");
         }
@@ -610,8 +710,8 @@ public class WasiFilesystemContext implements WasmComponentContext {
         boolean create = openFlags.contains("create");
         boolean exclusive = openFlags.contains("exclusive");
         boolean truncate = openFlags.contains("truncate");
-        boolean canRead = descriptorFlags.contains("read");
-        boolean canWrite = descriptorFlags.contains("write");
+        boolean canRead = flags.contains("read");
+        boolean canWrite = flags.contains("write");
 
         try {
             boolean existingDirectory = Files.isDirectory(resolved);
@@ -654,14 +754,21 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] removeDirectoryAt(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        String pathStr = (String) args[1];
+    /**
+     * Symlinks are not supported (see class javadoc).
+     */
+    @Override
+    public WitResult descriptorReadlinkAt(WasmtimeComponentInstance instance, WitResource self, String path) {
+        return errorResult("unsupported");
+    }
+
+    @Override
+    public WitResult descriptorRemoveDirectoryAt(WasmtimeComponentInstance instance, WitResource self, String path) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null || !entry.directory) {
             return errorResult("not-directory");
         }
-        Path resolved = PathSandbox.resolve(entry.path, pathStr);
+        Path resolved = PathSandbox.resolve(entry.path, path);
         if (resolved == null) {
             return errorResult("access");
         }
@@ -683,24 +790,21 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] renameAt(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        String oldPathStr = (String) args[1];
-        WitResource newDescriptor = (WitResource) args[2];
-        String newPathStr = (String) args[3];
-
+    @Override
+    public WitResult descriptorRenameAt(WasmtimeComponentInstance instance, WitResource self, String oldPath,
+            WitResource newDescriptor, String newPath) {
         DescriptorEntry oldEntry = descriptors.get(self.rep());
         DescriptorEntry newEntry = descriptors.get(newDescriptor.rep());
         if (oldEntry == null || newEntry == null || !oldEntry.directory || !newEntry.directory) {
             return errorResult("not-directory");
         }
-        Path oldPath = PathSandbox.resolve(oldEntry.path, oldPathStr);
-        Path newPath = PathSandbox.resolve(newEntry.path, newPathStr);
-        if (oldPath == null || newPath == null) {
+        Path oldPathResolved = PathSandbox.resolve(oldEntry.path, oldPath);
+        Path newPathResolved = PathSandbox.resolve(newEntry.path, newPath);
+        if (oldPathResolved == null || newPathResolved == null) {
             return errorResult("access");
         }
         try {
-            Files.move(oldPath, newPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.move(oldPathResolved, newPathResolved, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             return okResult(null);
         } catch (NoSuchFileException e) {
             return errorResult("no-entry");
@@ -709,14 +813,22 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] unlinkFileAt(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        String pathStr = (String) args[1];
+    /**
+     * Symlinks are not supported (see class javadoc).
+     */
+    @Override
+    public WitResult descriptorSymlinkAt(WasmtimeComponentInstance instance, WitResource self, String oldPath,
+            String newPath) {
+        return errorResult("unsupported");
+    }
+
+    @Override
+    public WitResult descriptorUnlinkFileAt(WasmtimeComponentInstance instance, WitResource self, String path) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null || !entry.directory) {
             return errorResult("not-directory");
         }
-        Path resolved = PathSandbox.resolve(entry.path, pathStr);
+        Path resolved = PathSandbox.resolve(entry.path, path);
         if (resolved == null) {
             return errorResult("access");
         }
@@ -733,8 +845,27 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] metadataHash(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    /**
+     * Compares resolved host paths (falling back to {@link Files#isSameFile}
+     * when available) since this implementation doesn't track a separate
+     * inode/file-key identity of its own.
+     */
+    @Override
+    public boolean descriptorIsSameObject(WasmtimeComponentInstance instance, WitResource self, WitResource other) {
+        DescriptorEntry a = descriptors.get(self.rep());
+        DescriptorEntry b = descriptors.get(other.rep());
+        if (a == null || b == null) {
+            return false;
+        }
+        try {
+            return Files.isSameFile(a.path, b.path);
+        } catch (IOException e) {
+            return a.path.toAbsolutePath().normalize().equals(b.path.toAbsolutePath().normalize());
+        }
+    }
+
+    @Override
+    public WitResult descriptorMetadataHash(WasmtimeComponentInstance instance, WitResource self) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null) {
             return errorResult("bad-descriptor");
@@ -742,21 +873,21 @@ public class WasiFilesystemContext implements WasmComponentContext {
         return metadataHashFor(entry.path);
     }
 
-    protected Object[] metadataHashAt(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        String pathStr = (String) args[2];
+    @Override
+    public WitResult descriptorMetadataHashAt(WasmtimeComponentInstance instance, WitResource self,
+            Set<String> pathFlags, String path) {
         DescriptorEntry entry = descriptors.get(self.rep());
         if (entry == null || !entry.directory) {
             return errorResult("not-directory");
         }
-        Path resolved = PathSandbox.resolve(entry.path, pathStr);
+        Path resolved = PathSandbox.resolve(entry.path, path);
         if (resolved == null) {
             return errorResult("access");
         }
         return metadataHashFor(resolved);
     }
 
-    private static Object[] metadataHashFor(Path path) {
+    private static WitResult metadataHashFor(Path path) {
         try {
             BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class);
             long lower = attrs.fileKey() != null ? attrs.fileKey().hashCode() : path.toAbsolutePath().hashCode();
@@ -772,14 +903,25 @@ public class WasiFilesystemContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] getDirectories(WasmtimeComponentInstance instance, Object[] args) {
+    /**
+     * This implementation never attaches real error-code metadata to
+     * {@code error} resources (see class javadoc), so there's never a
+     * filesystem-related code to report.
+     */
+    @Override
+    public Optional<Object> typesFilesystemErrorCode(WasmtimeComponentInstance instance, WitResource err) {
+        return Optional.empty();
+    }
+
+    @Override
+    public List<Object> preopensGetDirectories(WasmtimeComponentInstance instance) {
         List<Object> result = new ArrayList<>();
         for (Map.Entry<String, Path> e : pathMappings.entrySet()) {
             int rep = nextRep.getAndIncrement();
             descriptors.put(rep, new DescriptorEntry(e.getValue(), true, null, true, true));
             result.add(new Object[] { WitResource.own(RESOURCE_DESCRIPTOR, rep), e.getKey() });
         }
-        return new Object[] { result };
+        return result;
     }
 
     @Override

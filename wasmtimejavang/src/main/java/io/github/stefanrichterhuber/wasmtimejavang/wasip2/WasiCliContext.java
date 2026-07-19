@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -13,21 +14,33 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import io.github.stefanrichterhuber.wasmtimejavang.ComponentContextLookup;
-import io.github.stefanrichterhuber.wasmtimejavang.ComponentFunction;
-import io.github.stefanrichterhuber.wasmtimejavang.ResourceDestructor;
 import io.github.stefanrichterhuber.wasmtimejavang.SemanticVersion;
-import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.NoOpInputStream;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.NoOpOutputStream;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.ProcExitException;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.EnvironmentContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.ExitContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.StderrContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.StdinContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.StdoutContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TerminalInputContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TerminalOutputContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TerminalStderrContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TerminalStdinContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TerminalStdoutContext;
 
 /**
  * Implementation of the {@code wasi:cli/*} interfaces (WASI Preview 2,
  * 0.2.6): environment, exit, stdio, and terminal-* stubs -- the
  * {@code "wasi-cli"} component context.
+ * <br>
+ * Implements all ten generated interfaces at once (see
+ * {@link WasiRandomContext} for why this works and how
+ * {@code getImportFunctions()}/{@code getImportResources()}/
+ * {@code getProvidedInterfaces()} get combined).
  * <br>
  * Depends on {@code "wasi-io"} ({@link WasiIoResources}) to actually register
  * the {@code input-stream}/{@code output-stream} resources
@@ -40,33 +53,20 @@ import io.github.stefanrichterhuber.wasmtimejavang.wasip1.ProcExitException;
  * {@link WasiIoContext}'s class javadoc for the (blocking-only) read support
  * a guest gets from the resulting resource.
  */
-public class WasiCliContext implements WasmComponentContext {
+public class WasiCliContext implements EnvironmentContext, ExitContext, StdinContext, StdoutContext, StderrContext,
+        TerminalInputContext, TerminalOutputContext, TerminalStdinContext, TerminalStdoutContext,
+        TerminalStderrContext {
     private static final Logger LOGGER = LogManager.getLogger();
 
     /** The stable name other contexts reference via {@code getDependencies()}. */
     public static final String NAME = "wasi-cli";
-
-    private static final String WASI_CLI_ENVIRONMENT = "wasi:cli/environment";
-    private static final String WASI_CLI_EXIT = "wasi:cli/exit";
-    private static final String WASI_CLI_STDIN = "wasi:cli/stdin";
-    private static final String WASI_CLI_STDOUT = "wasi:cli/stdout";
-    private static final String WASI_CLI_STDERR = "wasi:cli/stderr";
-    private static final String WASI_CLI_TERMINAL_INPUT = "wasi:cli/terminal-input";
-    private static final String WASI_CLI_TERMINAL_OUTPUT = "wasi:cli/terminal-output";
-    private static final String WASI_CLI_TERMINAL_STDIN = "wasi:cli/terminal-stdin";
-    private static final String WASI_CLI_TERMINAL_STDOUT = "wasi:cli/terminal-stdout";
-    private static final String WASI_CLI_TERMINAL_STDERR = "wasi:cli/terminal-stderr";
-    private static final Set<String> PROVIDED_INTERFACES = Set.of(
-            WASI_CLI_ENVIRONMENT, WASI_CLI_EXIT, WASI_CLI_STDIN, WASI_CLI_STDOUT, WASI_CLI_STDERR,
-            WASI_CLI_TERMINAL_INPUT, WASI_CLI_TERMINAL_OUTPUT,
-            WASI_CLI_TERMINAL_STDIN, WASI_CLI_TERMINAL_STDOUT, WASI_CLI_TERMINAL_STDERR);
 
     private final Map<String, String> env = new HashMap<>();
     private final List<String> args = new ArrayList<>();
     private InputStream stdin = new NoOpInputStream();
     private OutputStream stdout = new NoOpOutputStream();
     private OutputStream stderr = new NoOpOutputStream();
-    private SemanticVersion version = WasiCliContext.DEFAULT_VERSION;
+    private SemanticVersion version = DEFAULT_VERSION;
 
     private WasiIoResources io;
 
@@ -133,7 +133,18 @@ public class WasiCliContext implements WasmComponentContext {
 
     @Override
     public Set<String> getProvidedInterfaces() {
-        return PROVIDED_INTERFACES;
+        Set<String> result = new LinkedHashSet<>();
+        result.addAll(EnvironmentContext.super.getProvidedInterfaces());
+        result.addAll(ExitContext.super.getProvidedInterfaces());
+        result.addAll(StdinContext.super.getProvidedInterfaces());
+        result.addAll(StdoutContext.super.getProvidedInterfaces());
+        result.addAll(StderrContext.super.getProvidedInterfaces());
+        result.addAll(TerminalInputContext.super.getProvidedInterfaces());
+        result.addAll(TerminalOutputContext.super.getProvidedInterfaces());
+        result.addAll(TerminalStdinContext.super.getProvidedInterfaces());
+        result.addAll(TerminalStdoutContext.super.getProvidedInterfaces());
+        result.addAll(TerminalStderrContext.super.getProvidedInterfaces());
+        return result;
     }
 
     @Override
@@ -152,81 +163,114 @@ public class WasiCliContext implements WasmComponentContext {
     @Override
     public List<ComponentImportFunction> getImportFunctions() {
         List<ComponentImportFunction> result = new ArrayList<>();
-        result.add(func(WASI_CLI_ENVIRONMENT + "@" + version, "get-environment", this::getEnvironment));
-        result.add(func(WASI_CLI_ENVIRONMENT + "@" + version, "get-arguments", this::getArguments));
-        result.add(func(WASI_CLI_EXIT + "@" + version, "exit", this::exit));
-        result.add(func(WASI_CLI_STDIN + "@" + version, "get-stdin", this::getStdin));
-        result.add(func(WASI_CLI_STDOUT + "@" + version, "get-stdout", this::getStdout));
-        result.add(func(WASI_CLI_STDERR + "@" + version, "get-stderr", this::getStderr));
-        result.add(func(WASI_CLI_TERMINAL_STDIN + "@" + version, "get-terminal-stdin", this::none));
-        result.add(func(WASI_CLI_TERMINAL_STDOUT + "@" + version, "get-terminal-stdout", this::none));
-        result.add(func(WASI_CLI_TERMINAL_STDERR + "@" + version, "get-terminal-stderr", this::none));
+        result.addAll(EnvironmentContext.super.getImportFunctions());
+        result.addAll(ExitContext.super.getImportFunctions());
+        result.addAll(StdinContext.super.getImportFunctions());
+        result.addAll(StdoutContext.super.getImportFunctions());
+        result.addAll(StderrContext.super.getImportFunctions());
+        result.addAll(TerminalInputContext.super.getImportFunctions());
+        result.addAll(TerminalOutputContext.super.getImportFunctions());
+        result.addAll(TerminalStdinContext.super.getImportFunctions());
+        result.addAll(TerminalStdoutContext.super.getImportFunctions());
+        result.addAll(TerminalStderrContext.super.getImportFunctions());
         return result;
     }
 
     @Override
     public List<ComponentImportResource> getImportResources() {
-        return List.of(
-                resource(WASI_CLI_STDIN + "@" + version, "input-stream", io::dropInputStream),
-                resource(WASI_CLI_STDOUT + "@" + version, "output-stream", io::dropOutputStream),
-                resource(WASI_CLI_STDERR + "@" + version, "output-stream", io::dropOutputStream),
-                resource(WASI_CLI_TERMINAL_INPUT + "@" + version, "terminal-input", this::dropNoop),
-                resource(WASI_CLI_TERMINAL_OUTPUT + "@" + version, "terminal-output", this::dropNoop),
-                resource(WASI_CLI_TERMINAL_STDIN + "@" + version, "terminal-input", this::dropNoop),
-                resource(WASI_CLI_TERMINAL_STDOUT + "@" + version, "terminal-output", this::dropNoop),
-                resource(WASI_CLI_TERMINAL_STDERR + "@" + version, "terminal-output", this::dropNoop));
+        List<ComponentImportResource> result = new ArrayList<>();
+        result.addAll(EnvironmentContext.super.getImportResources());
+        result.addAll(ExitContext.super.getImportResources());
+        result.addAll(StdinContext.super.getImportResources());
+        result.addAll(StdoutContext.super.getImportResources());
+        result.addAll(StderrContext.super.getImportResources());
+        result.addAll(TerminalInputContext.super.getImportResources());
+        result.addAll(TerminalOutputContext.super.getImportResources());
+        result.addAll(TerminalStdinContext.super.getImportResources());
+        result.addAll(TerminalStdoutContext.super.getImportResources());
+        result.addAll(TerminalStderrContext.super.getImportResources());
+        return result;
     }
 
-    private static ComponentImportFunction func(String interfaceName, String funcName, ComponentFunction function) {
-        return new ComponentImportFunction(interfaceName, funcName, function);
+    @Override
+    public void dropInputStream(int rep) {
+        io.dropInputStream(rep);
     }
 
-    private static ComponentImportResource resource(String interfaceName, String resourceName,
-            ResourceDestructor destructor) {
-        return new ComponentImportResource(interfaceName, resourceName, destructor);
+    @Override
+    public void dropOutputStream(int rep) {
+        io.dropOutputStream(rep);
     }
 
-    private void dropNoop(int rep) {
-        // terminal-input/terminal-output are never actually constructed by
-        // this implementation (get-terminal-* always answers "not a tty"),
-        // so there is nothing to release.
+    @Override
+    public void dropTerminalInput(int rep) {
+        // terminal-input is never actually constructed by this implementation
+        // (get-terminal-* always answers "not a tty"), so there is nothing to
+        // release.
     }
 
-    private Object[] none(WasmtimeComponentInstance instance, Object[] args) {
-        return new Object[] { Optional.empty() };
+    @Override
+    public void dropTerminalOutput(int rep) {
+        // Same as dropTerminalInput: never actually constructed.
     }
 
-    protected Object[] getEnvironment(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public List<Object> environmentGetEnvironment(WasmtimeComponentInstance instance) {
         List<Object> entries = new ArrayList<>();
         for (Map.Entry<String, String> e : env.entrySet()) {
             entries.add(new Object[] { e.getKey(), e.getValue() });
         }
-        return new Object[] { entries };
+        return entries;
     }
 
-    protected Object[] getArguments(WasmtimeComponentInstance instance, Object[] callArgs) {
-        return new Object[] { List.copyOf(this.args) };
+    @Override
+    public List<Object> environmentGetArguments(WasmtimeComponentInstance instance) {
+        return List.copyOf(this.args);
     }
 
-    protected Object[] exit(WasmtimeComponentInstance instance, Object[] args) {
-        WitResult status = (WitResult) args[0];
+    @Override
+    public Optional<Object> environmentInitialCwd(WasmtimeComponentInstance instance) {
+        // No defined initial working directory in this implementation.
+        return Optional.empty();
+    }
+
+    @Override
+    public void exitExit(WasmtimeComponentInstance instance, WitResult status) {
         LOGGER.debug("Wasm component called wasi:cli/exit with ok={}", status.ok());
         throw new ProcExitException(status.ok() ? 0 : 1);
     }
 
-    protected Object[] getStdin(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public WitResource stdinGetStdin(WasmtimeComponentInstance instance) {
         int rep = io.registerInputStream(stdin);
-        return new Object[] { WitResource.own("input-stream", rep) };
+        return WitResource.own("input-stream", rep);
     }
 
-    protected Object[] getStdout(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public WitResource stdoutGetStdout(WasmtimeComponentInstance instance) {
         int rep = io.registerOutputStream(stdout);
-        return new Object[] { WitResource.own("output-stream", rep) };
+        return WitResource.own("output-stream", rep);
     }
 
-    protected Object[] getStderr(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public WitResource stderrGetStderr(WasmtimeComponentInstance instance) {
         int rep = io.registerOutputStream(stderr);
-        return new Object[] { WitResource.own("output-stream", rep) };
+        return WitResource.own("output-stream", rep);
+    }
+
+    @Override
+    public Optional<Object> terminalStdinGetTerminalStdin(WasmtimeComponentInstance instance) {
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<Object> terminalStdoutGetTerminalStdout(WasmtimeComponentInstance instance) {
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<Object> terminalStderrGetTerminalStderr(WasmtimeComponentInstance instance) {
+        return Optional.empty();
     }
 
     @Override

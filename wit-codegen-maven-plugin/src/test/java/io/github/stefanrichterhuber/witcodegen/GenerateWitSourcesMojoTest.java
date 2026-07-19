@@ -29,12 +29,12 @@ import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext.Componen
  * End-to-end verification: runs {@link GenerateWitSourcesMojo} against the
  * same {@code greet} interface {@code GreetComponentContext} (in the
  * {@code wasmtimejavang} module) hand-implements, then actually compiles the
- * generated class plus a small subclass and drives it exactly like
- * {@code WasmtimeCustomComponentTest} drives the hand-written version --
+ * generated interface plus a small implementing class and drives it exactly
+ * like {@code WasmtimeCustomComponentTest} drives the hand-written version --
  * confirming the generated plumbing produces the same wiring a human would
  * write by hand.
  * <br>
- * Only {@code GreetContextImpl}/{@code AbstractGreetContext} are loaded via a
+ * Only {@code GreetContextImpl}/{@code GreetContext} are loaded via a
  * dedicated classloader (they're compiled on the fly, into a directory not on
  * the test's own classpath); everything they reference in turn
  * ({@link WasmComponentContext} and friends) resolves back to the test's own
@@ -73,21 +73,21 @@ class GenerateWitSourcesMojoTest {
 
         Path generatedFile = outputDirectory
                 .resolve(TARGET_PACKAGE.replace('.', '/'))
-                .resolve("AbstractGreetContext.java");
+                .resolve("GreetContext.java");
         assertTrue(Files.exists(generatedFile), "expected " + generatedFile + " to be generated");
         assertTrue(project.getCompileSourceRoots().contains(outputDirectory.toString()));
 
         String implSource = """
                 package %s;
 
-                public class GreetContextImpl extends AbstractGreetContext {
+                public class GreetContextImpl implements GreetContext {
                     @Override
-                    protected String hello(io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance instance, String name) {
+                    public String greetHello(io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance instance, String name) {
                         return "Hello, " + name + "!";
                     }
 
                     @Override
-                    protected int add(io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance instance, int a, int b) {
+                    public int greetAdd(io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance instance, int a, int b) {
                         return a + b;
                     }
                 }

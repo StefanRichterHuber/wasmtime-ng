@@ -96,6 +96,8 @@ public class WasiCliContextTest {
                 f -> f.interfaceName().equals(environment) && f.funcName().equals("get-environment")));
         assertTrue(functions.stream().anyMatch(
                 f -> f.interfaceName().equals(environment) && f.funcName().equals("get-arguments")));
+        assertTrue(functions.stream().anyMatch(
+                f -> f.interfaceName().equals(environment) && f.funcName().equals("initial-cwd")));
         assertTrue(functions.stream()
                 .anyMatch(f -> f.interfaceName().equals(exit) && f.funcName().equals("exit")));
         assertTrue(functions.stream()
@@ -142,9 +144,7 @@ public class WasiCliContextTest {
         WasiCliContext cli = newLinkedCli(new WasiIoContext());
         cli.withEnvs(Map.of("FOO", "BAR", "BAZ", "QUX"));
 
-        Object[] result = cli.getEnvironment(null, new Object[0]);
-        @SuppressWarnings("unchecked")
-        List<Object> entries = (List<Object>) result[0];
+        List<Object> entries = cli.environmentGetEnvironment(null);
         assertEquals(2, entries.size());
 
         boolean sawFoo = false;
@@ -165,9 +165,7 @@ public class WasiCliContextTest {
     @Test
     public void getEnvironmentIsEmptyByDefault() {
         WasiCliContext cli = newLinkedCli(new WasiIoContext());
-        Object[] result = cli.getEnvironment(null, new Object[0]);
-        @SuppressWarnings("unchecked")
-        List<Object> entries = (List<Object>) result[0];
+        List<Object> entries = cli.environmentGetEnvironment(null);
         assertTrue(entries.isEmpty());
     }
 
@@ -176,26 +174,28 @@ public class WasiCliContextTest {
         WasiCliContext cli = newLinkedCli(new WasiIoContext());
         cli.withArguments(List.of("prog", "arg1", "arg2"));
 
-        Object[] result = cli.getArguments(null, new Object[0]);
-        @SuppressWarnings("unchecked")
-        List<String> arguments = (List<String>) result[0];
+        List<Object> arguments = cli.environmentGetArguments(null);
         assertEquals(List.of("prog", "arg1", "arg2"), arguments);
     }
 
     @Test
     public void getArgumentsIsEmptyByDefault() {
         WasiCliContext cli = newLinkedCli(new WasiIoContext());
-        Object[] result = cli.getArguments(null, new Object[0]);
-        @SuppressWarnings("unchecked")
-        List<String> arguments = (List<String>) result[0];
+        List<Object> arguments = cli.environmentGetArguments(null);
         assertTrue(arguments.isEmpty());
+    }
+
+    @Test
+    public void initialCwdIsAlwaysEmpty() {
+        WasiCliContext cli = newLinkedCli(new WasiIoContext());
+        assertEquals(Optional.empty(), cli.environmentInitialCwd(null));
     }
 
     @Test
     public void exitThrowsProcExitExceptionMappingOkToCodeZero() {
         WasiCliContext cli = newLinkedCli(new WasiIoContext());
         ProcExitException ex = assertThrows(ProcExitException.class,
-                () -> cli.exit(null, new Object[] { WitResult.ok(null) }));
+                () -> cli.exitExit(null, WitResult.ok(null)));
         assertEquals(0, ex.getCode());
     }
 
@@ -203,7 +203,7 @@ public class WasiCliContextTest {
     public void exitThrowsProcExitExceptionMappingErrToCodeOne() {
         WasiCliContext cli = newLinkedCli(new WasiIoContext());
         ProcExitException ex = assertThrows(ProcExitException.class,
-                () -> cli.exit(null, new Object[] { WitResult.err(null) }));
+                () -> cli.exitExit(null, WitResult.err(null)));
         assertEquals(1, ex.getCode());
     }
 
@@ -214,8 +214,7 @@ public class WasiCliContextTest {
         WasiCliContext cli = newLinkedCli(io);
         cli.withStdIn(configuredStdin);
 
-        Object[] result = cli.getStdin(null, new Object[0]);
-        WitResource resource = (WitResource) result[0];
+        WitResource resource = cli.stdinGetStdin(null);
         assertEquals("input-stream", resource.resourceName());
         assertTrue(resource.owned());
         assertSame(configuredStdin, io.getInputStream(resource.rep()));
@@ -228,8 +227,7 @@ public class WasiCliContextTest {
         WasiCliContext cli = newLinkedCli(io);
         cli.withStdOut(configuredStdout);
 
-        Object[] result = cli.getStdout(null, new Object[0]);
-        WitResource resource = (WitResource) result[0];
+        WitResource resource = cli.stdoutGetStdout(null);
         assertEquals("output-stream", resource.resourceName());
         assertTrue(resource.owned());
         assertSame(configuredStdout, io.getOutputStream(resource.rep()));
@@ -242,8 +240,7 @@ public class WasiCliContextTest {
         WasiCliContext cli = newLinkedCli(io);
         cli.withStdErr(configuredStderr);
 
-        Object[] result = cli.getStderr(null, new Object[0]);
-        WitResource resource = (WitResource) result[0];
+        WitResource resource = cli.stderrGetStderr(null);
         assertEquals("output-stream", resource.resourceName());
         assertTrue(resource.owned());
         assertSame(configuredStderr, io.getOutputStream(resource.rep()));

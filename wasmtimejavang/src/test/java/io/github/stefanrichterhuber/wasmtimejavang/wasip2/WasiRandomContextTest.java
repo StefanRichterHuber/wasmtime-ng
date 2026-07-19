@@ -1,7 +1,7 @@
 package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.SecureRandom;
@@ -53,40 +53,33 @@ public class WasiRandomContextTest {
     @Test
     public void getRandomBytesReturnsBytesOfCorrectLength() {
         WasiRandomContext random = new WasiRandomContext();
-        Object[] result = random.getRandomBytes(null, new Object[] { 16L });
-        byte[] bytes = (byte[]) result[0];
+        byte[] bytes = random.randomGetRandomBytes(null, 16L);
         assertEquals(16, bytes.length);
     }
 
     @Test
     public void getRandomU64ReturnsValue() {
         WasiRandomContext random = new WasiRandomContext();
-        Object[] result = random.getRandomU64(null, new Object[0]);
-        Long val = (Long) result[0];
-        assertNotNull(val);
+        assertDoesNotThrow(() -> random.randomGetRandomU64(null));
     }
 
     @Test
     public void getInsecureRandomBytesReturnsBytesOfCorrectLength() {
         WasiRandomContext random = new WasiRandomContext();
-        Object[] result = random.getInsecureRandomBytes(null, new Object[] { 32L });
-        byte[] bytes = (byte[]) result[0];
+        byte[] bytes = random.insecureGetInsecureRandomBytes(null, 32L);
         assertEquals(32, bytes.length);
     }
 
     @Test
     public void getInsecureRandomU64ReturnsValue() {
         WasiRandomContext random = new WasiRandomContext();
-        Object[] result = random.getInsecureRandomU64(null, new Object[0]);
-        Long val = (Long) result[0];
-        assertNotNull(val);
+        assertDoesNotThrow(() -> random.insecureGetInsecureRandomU64(null));
     }
 
     @Test
     public void insecureSeedReturnsTuple() {
         WasiRandomContext random = new WasiRandomContext();
-        Object[] result = random.insecureSeed(null, new Object[0]);
-        Object[] tuple = (Object[]) result[0];
+        Object[] tuple = random.insecureSeedInsecureSeed(null);
         assertEquals(2, tuple.length);
         assertTrue(tuple[0] instanceof Long);
         assertTrue(tuple[1] instanceof Long);
@@ -118,13 +111,13 @@ public class WasiRandomContextTest {
 
         WasiRandomContext random = new WasiRandomContext().withSecureRandom(mockSecure).withRandom(mockInsecure);
 
-        byte[] secureBytes = (byte[]) random.getRandomBytes(null, new Object[] { 8L })[0];
+        byte[] secureBytes = random.randomGetRandomBytes(null, 8L);
         assertEquals(42, secureBytes[0]);
 
-        byte[] insecureBytes = (byte[]) random.getInsecureRandomBytes(null, new Object[] { 8L })[0];
+        byte[] insecureBytes = random.insecureGetInsecureRandomBytes(null, 8L);
         assertEquals(42, insecureBytes[0]);
 
-        assertEquals(999L, random.getInsecureRandomU64(null, new Object[0])[0]);
+        assertEquals(999L, random.insecureGetInsecureRandomU64(null));
     }
 
     @Test

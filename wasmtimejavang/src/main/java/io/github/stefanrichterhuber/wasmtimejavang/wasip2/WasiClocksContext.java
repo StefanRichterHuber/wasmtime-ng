@@ -1,20 +1,27 @@
 package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import io.github.stefanrichterhuber.wasmtimejavang.ComponentContextLookup;
 import io.github.stefanrichterhuber.wasmtimejavang.SemanticVersion;
-import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.MonotonicClockContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.WallClockContext;
 
 /**
  * Implementation of {@code wasi:clocks/monotonic-clock} and
  * {@code wasi:clocks/wall-clock} (WASI Preview 2, 0.2.6) -- the
  * {@code "wasi-clocks"} component context.
+ * <br>
+ * Implements both generated interfaces at once (see {@link WasiRandomContext}
+ * for why this works and how {@code getImportFunctions()}/
+ * {@code getImportResources()}/{@code getProvidedInterfaces()} get combined).
  * <br>
  * Depends on {@code "wasi-io"} ({@link WasiIoResources}) because the
  * {@code pollable} resource monotonic-clock's {@code subscribe-instant}/
@@ -22,17 +29,13 @@ import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
  * pollable minted here must come from the same table {@code wasi:io/poll}'s
  * {@code [method]pollable.block} reads from.
  */
-public class WasiClocksContext implements WasmComponentContext {
+public class WasiClocksContext implements MonotonicClockContext, WallClockContext {
 
     /** The stable name other contexts reference via {@code getDependencies()}. */
     public static final String NAME = "wasi-clocks";
 
-    private static final String WASI_CLOCKS_MONOTONIC = "wasi:clocks/monotonic-clock";
-    private static final String WASI_CLOCKS_WALL = "wasi:clocks/wall-clock";
-    private static final Set<String> PROVIDED_INTERFACES = Set.of(WASI_CLOCKS_MONOTONIC, WASI_CLOCKS_WALL);
-
     private WasiIoResources io;
-    private SemanticVersion version = WasiCliContext.DEFAULT_VERSION;
+    private SemanticVersion version = DEFAULT_VERSION;
 
     @Override
     public String name() {
@@ -41,7 +44,10 @@ public class WasiClocksContext implements WasmComponentContext {
 
     @Override
     public Set<String> getProvidedInterfaces() {
-        return PROVIDED_INTERFACES;
+        Set<String> result = new LinkedHashSet<>();
+        result.addAll(MonotonicClockContext.super.getProvidedInterfaces());
+        result.addAll(WallClockContext.super.getProvidedInterfaces());
+        return result;
     }
 
     @Override
@@ -59,43 +65,70 @@ public class WasiClocksContext implements WasmComponentContext {
 
     @Override
     public List<ComponentImportFunction> getImportFunctions() {
-        return List.of(
-                new ComponentImportFunction(WASI_CLOCKS_MONOTONIC + "@" + version, "now", this::monotonicNow),
-                new ComponentImportFunction(WASI_CLOCKS_MONOTONIC + "@" + version, "subscribe-instant",
-                        this::subscribeInstant),
-                new ComponentImportFunction(WASI_CLOCKS_MONOTONIC + "@" + version, "subscribe-duration",
-                        this::subscribeDuration),
-                new ComponentImportFunction(WASI_CLOCKS_WALL + "@" + version, "now", this::wallClockNow));
+        List<ComponentImportFunction> result = new ArrayList<>();
+        result.addAll(MonotonicClockContext.super.getImportFunctions());
+        result.addAll(WallClockContext.super.getImportFunctions());
+        return result;
     }
 
     @Override
     public List<ComponentImportResource> getImportResources() {
-        return List
-                .of(new ComponentImportResource(WASI_CLOCKS_MONOTONIC + "@" + version, "pollable", io::dropPollable));
+        List<ComponentImportResource> result = new ArrayList<>();
+        result.addAll(MonotonicClockContext.super.getImportResources());
+        result.addAll(WallClockContext.super.getImportResources());
+        return result;
     }
 
-    protected Object[] monotonicNow(WasmtimeComponentInstance instance, Object[] args) {
-        return new Object[] { System.nanoTime() };
+    @Override
+    public long monotonicClockNow(WasmtimeComponentInstance instance) {
+        return System.nanoTime();
     }
 
-    protected Object[] subscribeInstant(WasmtimeComponentInstance instance, Object[] args) {
-        long when = (Long) args[0];
+    /**
+     * {@code System.nanoTime()} claims nanosecond precision, so 1 is reported
+     * as the clock's resolution.
+     */
+    @Override
+    public long monotonicClockResolution(WasmtimeComponentInstance instance) {
+        return 1L;
+    }
+
+    @Override
+    public WitResource monotonicClockSubscribeInstant(WasmtimeComponentInstance instance, long when) {
         int rep = io.registerPollableDeadline(when);
-        return new Object[] { WitResource.own("pollable", rep) };
+        return WitResource.own("pollable", rep);
     }
 
-    protected Object[] subscribeDuration(WasmtimeComponentInstance instance, Object[] args) {
-        long durationNanos = (Long) args[0];
-        int rep = io.registerPollableDeadline(System.nanoTime() + durationNanos);
-        return new Object[] { WitResource.own("pollable", rep) };
+    @Override
+    public WitResource monotonicClockSubscribeDuration(WasmtimeComponentInstance instance, long when) {
+        int rep = io.registerPollableDeadline(System.nanoTime() + when);
+        return WitResource.own("pollable", rep);
     }
 
-    protected Object[] wallClockNow(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public void dropPollable(int rep) {
+        io.dropPollable(rep);
+    }
+
+    @Override
+    public Map<String, Object> wallClockNow(WasmtimeComponentInstance instance) {
         long millis = System.currentTimeMillis();
         Map<String, Object> datetime = new LinkedHashMap<>();
         datetime.put("seconds", millis / 1000L);
         datetime.put("nanoseconds", (int) ((millis % 1000L) * 1_000_000L));
-        return new Object[] { datetime };
+        return datetime;
+    }
+
+    /**
+     * {@code System.currentTimeMillis()} backs {@link #wallClockNow}, so its
+     * actual granularity (1ms) is reported as the clock's resolution.
+     */
+    @Override
+    public Map<String, Object> wallClockResolution(WasmtimeComponentInstance instance) {
+        Map<String, Object> datetime = new LinkedHashMap<>();
+        datetime.put("seconds", 0L);
+        datetime.put("nanoseconds", 1_000_000);
+        return datetime;
     }
 
     @Override

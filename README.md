@@ -8,6 +8,13 @@ Wasmtime-java-ng provides Java bindings for [Wasmtime](https://github.com/byteco
 
 This project allows Java applications to execute WebAssembly modules, interact with linear memory, and leverage the WebAssembly System Interface (WASI) through a native bridge built on Rust.
 
+## Project Structure
+
+This repository is a Maven multi-module reactor:
+
+* **[`wasmtimejavang`](wasmtimejavang)** — the library you actually depend on (see [Usage](#usage) below); everything else on this page lives here.
+* **[`wit-parser`](wit-parser)** and **[`wit-codegen-maven-plugin`](wit-codegen-maven-plugin)** — build-time-only tooling, not a runtime dependency of `wasmtimejavang`. Together they let a *consuming* project generate typed, Java component-context interfaces straight from a WIT file instead of hand-writing them — see [Implementing your own component context](#implementing-your-own-component-context).
+
 ## Prerequisites
 
 Building this project requires both Rust and Java toolchains:
@@ -268,9 +275,9 @@ Each interface group lives in its own `WasmComponentContext` implementation unde
 | `wasi:cli/environment,exit,stdin,stdout,stderr,terminal-*` | `WasiCliContext` | ✅ | `withEnvs(Map)`, `withArguments(List)`, `withStdIn/StdOut/StdErr(...)`. `terminal-*` always reports "not a tty" |
 | `wasi:clocks/monotonic-clock,wall-clock` | `WasiClocksContext` | ✅ | none (uses `System.nanoTime()`/`System.currentTimeMillis()`) |
 | `wasi:random/random,insecure,insecure-seed` | `WasiRandomContext` | ✅ | `withSecureRandom(Random)`, `withRandom(Random)` (the insecure generator) |
-| `wasi:io/poll,streams,error` | `WasiIoContext` | 🟡 | Owns the shared stream/pollable tables other contexts (`WasiCliContext`, `WasiClocksContext`, `WasiFilesystemContext`, `WasiSocketsContext`) depend on. Both blocking and non-blocking reads are implemented (`[method]input-stream.blocking-read` and `.read`, plus the batch `poll` function), but not `skip`/`blocking-skip` |
-| `wasi:filesystem/types,preopens` | `WasiFilesystemContext` | 🟡 | `withDirectory(Path host, String client)` (repeatable). No symlink support (`symlink-at`/`readlink-at` not implemented, `path-flags.symlink-follow` ignored — host paths always resolve following symlinks) |
-| `wasi:sockets/network,instance-network,tcp(-create-socket),udp(-create-socket),ip-name-lookup` | `WasiSocketsContext` | 🟡 | None — a guest creates/binds/connects/listens its own sockets, same as on a real host. IPv4 only (`ipv6` rejected as `not-supported`). Some options `java.net` has no equivalent for (TCP `hop-limit`, TCP keep-alive idle-time/interval/count, UDP `unicast-hop-limit`) are stored and returned as configured but not actually applied to the OS socket |
+| `wasi:io/poll,streams,error` | `WasiIoContext` | ✅ | Owns the shared stream/pollable tables other contexts (`WasiCliContext`, `WasiClocksContext`, `WasiFilesystemContext`, `WasiSocketsContext`) depend on. Both blocking and non-blocking reads/skips are implemented (`[method]input-stream.{blocking-,}read`/`{blocking-,}skip`, the batch `poll` function, `[method]pollable.ready`) |
+| `wasi:filesystem/types,preopens` | `WasiFilesystemContext` | ✅ | `withDirectory(Path host, String client)` (repeatable). No symlink support by design: `symlink-at`/`readlink-at` report `unsupported`, and `path-flags.symlink-follow` is ignored — host paths always resolve following symlinks |
+| `wasi:sockets/network,instance-network,tcp(-create-socket),udp(-create-socket),ip-name-lookup` | `WasiSocketsContext` | ✅ | None — a guest creates/binds/connects/listens its own sockets, same as on a real host. IPv4 only (`ipv6` rejected as `not-supported`, `[method]{tcp,udp}-socket.address-family` always reports `ipv4`). Some options `java.net` has no equivalent for (TCP `hop-limit`, TCP keep-alive idle-time/interval/count, UDP `unicast-hop-limit`) are stored and returned as configured but not actually applied to the OS socket |
 
 `WasiFilesystemContext` mirrors WASI Preview 1's filesystem support (`WasiPI1Context` + `withDirectory`): preopened host directories are exposed as `descriptor` resources sandboxed the same way -- a guest path can never resolve outside its preopened directory, no matter how many `..` segments it contains. Reads/writes go through `wasi:io/streams` the same way `wasi:cli/stdout` does: `[method]descriptor.read-via-stream`/`write-via-stream`/`append-via-stream` hand out `input-stream`/`output-stream` resources from the shared `wasi-io` table (so it depends on `"wasi-io"` the same way `WasiCliContext` and `WasiClocksContext` do), rather than reading/writing bytes directly.
 
@@ -300,7 +307,7 @@ linker.linkRequired(component); // pulls in wasi-io, wasi-clocks, etc. as needed
 
 ### Implementing your own component context
 
-This is the mechanism that matters most for actually using this library: WASI is just the *built-in* set of `WasmComponentContext` implementations, and any Java application can define its own to expose custom host functionality — database access, business logic, whatever — to a component's imports, the exact same way. This section walks through a complete, real, runnable example (its full source is in the repo and covered by `WasmtimeCustomComponentTest`, so it's guaranteed to stay in sync with the code, not just aspirational documentation).
+This is the mechanism that matters most for actually using this library: WASI is just the *built-in* set of `WasmComponentContext` implementations, and any Java application can define its own to expose custom host functionality — database access, business logic, whatever — to a component's imports, the exact same way. There are two ways to implement one: hand-write it directly against `WasmComponentContext` (full control, shown first below), or generate a typed interface from a WIT file via `wit-codegen-maven-plugin` and implement just the typed methods (less boilerplate — no manual version-string wiring or `Object[]` casts). Both are shown below using the same example (its full source is in the repo and covered by `WasmtimeCustomComponentTest`, so it's guaranteed to stay in sync with the code, not just aspirational documentation).
 
 **1. Define the interface in WIT.** This is the contract the guest and the host agree on — a Java-side `WasmComponentContext` needs no WIT file itself (it's built against the fully dynamic `component::Val` API), but the *component being compiled* does, since Rust needs it to generate typed bindings. [`src/test/rust/wasip2customtest/wit/world.wit`](src/test/rust/wasip2customtest/wit/world.wit):
 
@@ -336,7 +343,9 @@ fn main() {
 }
 ```
 
-**3. Implement `WasmComponentContext` in Java** to provide `hello`/`add`. [`GreetComponentContext`](src/test/java/io/github/stefanrichterhuber/wasmtimejavang/GreetComponentContext.java):
+**3. Implement it in Java.** Two ways — hand-write it directly against `WasmComponentContext`, or generate a typed interface from the same WIT file and implement that instead.
+
+**Hand-written**, to provide `hello`/`add` directly. [`GreetComponentContext`](src/test/java/io/github/stefanrichterhuber/wasmtimejavang/GreetComponentContext.java):
 
 ```java
 public class GreetComponentContext implements WasmComponentContext {
@@ -379,7 +388,74 @@ public class GreetComponentContext implements WasmComponentContext {
 
 Argument/return types follow the value bridge described above — here just `String` and `Integer` (WIT `u32`), but the same context could just as well take/return a `Map` (`record`), `List`/`Object[]` (`list`/`tuple`), `byte[]` (`list<u8>`), or a resource.
 
-**4. Link it and run.** [`WasmtimeCustomComponentTest`](src/test/java/io/github/stefanrichterhuber/wasmtimejavang/WasmtimeCustomComponentTest.java):
+**Or generated**, via `wit-codegen-maven-plugin`'s `generate-wit-sources` goal (bound to `generate-sources` by default). Add the plugin to your `pom.xml`, pointing `witSourceDirectory` at a directory containing the same `greet.wit` from step 1 (every `.wit` file directly in it is generated from independently):
+
+```xml
+<plugin>
+    <groupId>io.github.stefanrichterhuber</groupId>
+    <artifactId>wit-codegen-maven-plugin</artifactId>
+    <version>[Current Version]</version>
+    <executions>
+        <execution>
+            <goals>
+                <goal>generate-wit-sources</goal>
+            </goals>
+            <configuration>
+                <witSourceDirectory>${project.basedir}/src/main/wit</witSourceDirectory>
+                <targetPackage>com.example.generated</targetPackage>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+```
+
+This generates `com.example.generated.GreetContext` — an **interface**, not an abstract class (so a class can implement several generated interfaces at once — see "Combining interfaces" below), extending `WasmComponentContext` with `getImportFunctions()`/`getImportResources()`/`getProvidedInterfaces()`/`name()` already wired as `default` methods and one typed abstract method per WIT function (see [`WitCodeGenerator`](wit-codegen-maven-plugin/src/main/java/io/github/stefanrichterhuber/witcodegen/WitCodeGenerator.java) for the full WIT-to-Java type mapping). Implement it directly instead of hand-rolling `WasmComponentContext`:
+
+```java
+public class MyGreetContext implements com.example.generated.GreetContext {
+    @Override
+    public String hello(WasmtimeComponentInstance instance, String name) {
+        return "Hello, " + name + "!";
+    }
+
+    @Override
+    public int add(WasmtimeComponentInstance instance, int a, int b) {
+        return a + b;
+    }
+}
+```
+
+To generate from a real, multi-file WIT **world** instead of one interface (a package directory, optionally with a `deps/` subfolder) — e.g. to regenerate the scaffolding this project's own `Wasi*Context` classes are built on — configure `worldSourceDirectory` + `worldName` instead of (or alongside) `witSourceDirectory`:
+
+```xml
+<configuration>
+    <worldSourceDirectory>${project.basedir}/src/main/wit/wasi-cli/wit</worldSourceDirectory>
+    <worldName>command</worldName>
+    <targetPackage>com.example.generated.wasicli</targetPackage>
+</configuration>
+```
+
+This generates one interface per interface the world's imports flatten to (27 for `wasi:cli`'s `command` world). Exports are intentionally not modeled — `WasmComponentContext` only represents host-provided imports; call an export dynamically via `WasmtimeComponentInstance.invoke(...)` instead.
+
+**Combining interfaces.** Implementing several generated interfaces on one class (useful when they share state, e.g. two interfaces that both hand out a resource type minted by a shared table — this is exactly what every built-in `Wasi*Context` does) requires overriding `getImportFunctions()`/`getImportResources()`/`getProvidedInterfaces()` to combine each interface's own `default` implementation — Java requires this override whenever two implemented interfaces disagree on a `default` method's body, which any two distinct generated interfaces always do:
+
+```java
+public class MyBundledContext implements FooContext, BarContext {
+    @Override
+    public List<ComponentImportFunction> getImportFunctions() {
+        List<ComponentImportFunction> result = new ArrayList<>();
+        result.addAll(FooContext.super.getImportFunctions());
+        result.addAll(BarContext.super.getImportFunctions());
+        return result;
+    }
+    // ...same pattern for getImportResources()/getProvidedInterfaces(); withVersion()/getVersion()
+    // stay this class's own responsibility (a plain field) since interfaces can't hold state.
+}
+```
+
+**Note:** this project's own generated interfaces (`wasmtimejavang/src/main/java/.../wasip2/generated/`) can't be wired into `wasmtimejavang`'s own build this way — that would be a circular module dependency within this repository's reactor — so they're regenerated by hand when the WIT source changes rather than on every build. Your project, depending on `wasmtimejavang` as an ordinary library, doesn't have that constraint. `wit-parser`, a JNI binding around the [`wit-parser`](https://crates.io/crates/wit-parser) Rust crate, handles the actual WIT parsing behind the plugin.
+
+**4. Link it and run.** (identical either way — only the implementing class differs). [`WasmtimeCustomComponentTest`](src/test/java/io/github/stefanrichterhuber/wasmtimejavang/WasmtimeCustomComponentTest.java):
 
 ```java
 try (FileInputStream fis = new FileInputStream(wasmPath);
@@ -412,9 +488,9 @@ public void onDependenciesResolved(ComponentContextLookup lookup) {
 }
 ```
 
-**Auto-discovery.** To make a context discoverable by `linkRequired(component)` instead of linking it explicitly, declare the (bare, version-independent) interface names it implements via `getProvidedInterfaces()` (as `GreetComponentContext` already does above) and register the class as a `WasmComponentContext` [`ServiceLoader`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/ServiceLoader.html) provider (a `META-INF/services/io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext` file listing the class, which needs a public no-arg constructor or a public static `provider()` method) — this is exactly how the six built-in `Wasi*Context` classes register themselves.
+**Auto-discovery.** To make a context discoverable by `linkRequired(component)` instead of linking it explicitly, declare the (bare, version-independent) interface names it implements via `getProvidedInterfaces()` (as `GreetComponentContext` already does above — a generated interface has this pre-wired as a `default` method already, so a generated-based implementer gets it for free) and register the class as a `WasmComponentContext` [`ServiceLoader`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/ServiceLoader.html) provider (a `META-INF/services/io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext` file listing the class, which needs a public no-arg constructor or a public static `provider()` method) — this is exactly how the six built-in `Wasi*Context` classes register themselves.
 
-**Watch out:** `getProvidedInterfaces()` must be overridden even for a context that's *always* linked explicitly via `linkContext(...)` and never registered for `ServiceLoader` discovery — if that same call site also calls `linkRequired(...)` afterwards (as step 4 does), `linkRequired` has no other way to know the explicitly-linked context already satisfies the interface, and raises `IllegalStateException` for it. This is why `GreetComponentContext` overrides `getProvidedInterfaces()` above even though it's never meant to be auto-discovered.
+**Watch out:** `getProvidedInterfaces()` must be overridden (or, for a generated interface, already resolve correctly) even for a context that's *always* linked explicitly via `linkContext(...)` and never registered for `ServiceLoader` discovery — if that same call site also calls `linkRequired(...)` afterwards (as step 4 does), `linkRequired` has no other way to know the explicitly-linked context already satisfies the interface, and raises `IllegalStateException` for it. This is why the hand-written `GreetComponentContext` overrides `getProvidedInterfaces()` above even though it's never meant to be auto-discovered.
 
 ### Overriding a built-in WASI Preview 2 context
 
@@ -423,13 +499,26 @@ None of the `Wasi*Context` classes are `final`, and the built-ins are only ever 
 1. **Per-linker, explicit**: call `linker.linkContext(...)` with your own instance (a subclass, or an unrelated implementation) using the *same* `name()` (e.g. `"wasi-cli"`) before calling `linkRequired(...)`. Since `linkRequired` only auto-links interfaces nothing has claimed yet, your explicitly-linked context wins and the built-in provider is never consulted.
 2. **Global, via lookup strategy**: register your own `ComponentContextLookup` (e.g. a `RegistryComponentContextLookup` populated with your preferred instances, or a custom implementation) as a `META-INF/services/io.github.stefanrichterhuber.wasmtimejavang.ComponentContextLookup` provider. `WasmtimeComponentLinker` resolves its dependency-lookup strategy the same SPI way, falling back to `ServiceLoaderComponentContextLookup` (which is what discovers the built-ins) only if nothing else is registered — so this replaces resolution for every linker in the process, not just one.
 
+Each `Wasi*Context` implements one small, generated **interface per WIT interface** it covers (e.g. `WasiSocketsContext implements NetworkContext, InstanceNetworkContext, TcpCreateSocketContext, TcpContext, UdpCreateSocketContext, UdpContext, IpNameLookupContext`), with every WIT function as a plain typed method — so overriding one function's behavior in a subclass needs nothing beyond overriding that one method:
+
+```java
+public class Ipv6TcpSocketsContext extends WasiSocketsContext {
+    @Override
+    public WitEnum tcpSocketAddressFamily(WasmtimeComponentInstance instance, WitResource self) {
+        return new WitEnum("ipv6"); // the built-in implementation is IPv4-only
+    }
+}
+```
+
+These generated interfaces are regular public types shipped in the jar, under `io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli` — see [Implementing your own component context](#implementing-your-own-component-context) above for how they're produced and how to generate your own from a custom WIT interface.
+
 ### Version negotiation
 
 Every `WasmComponentContext` tracks a `SemanticVersion` (`withVersion`/`getVersion`), used to build the actual versioned interface name (e.g. `"wasi:cli/environment@0.2.6"`) each import is registered under — `getProvidedInterfaces()` itself stays version-independent (bare names), so lookup/auto-discovery doesn't need to know a component's exact required version up front. `getMiniumVersion()`/`getMaximumVersion()` (defaulted to accept anything) bound what `supportsVersion(...)` — and therefore `ComponentContextLookup.resolve(...)` — accepts; the built-in WASI contexts default to `0.2.6` (what `cargo build --target wasm32-wasip2` on current stable Rust actually emits) and accept `[0.0.1, 0.3.0]`, so they're ready for the eventual WASI 0.3 interfaces without code changes once toolchains catch up, but can be pinned with `.withVersion(...)` if a component needs something else within that range.
 
 ## Architecture
 
-The project is structured into three distinct layers:
+`wasmtimejavang` (see [Project Structure](#project-structure) above for the other two modules) is structured into three distinct layers:
 
 1. **Java API**: A type-safe wrapper that represents Wasmtime concepts (Engine, Module, Store, Instance) in Java. It uses `jar-jni` for automatic native library loading. Log4j2 is used as logging framework.
 2. **JNI Layer (Rust)**: Built using the [jni-rs](https://crates.io/crates/jni) crate. It manages the lifecycle of native Wasmtime objects and facilitates data exchange between the JVM and Rust. This layer also redirects Rust `log` crate output to Java's Log4j2. "Classic" Java JNI was preferred over the newer "Foreign Function and Memory API", due to the native library is only planned to be used with Java so it could be tailored to its use. This allows more direct Rust - Java interactions like easily calling Java methods on objects or even create new Java objects using their constructor. A "Foreign Function an Memory API" approach would have resulted in a thinner native layer with far higher implementation effort on the Java side for all the type conversion, especially sacrificing the type and lifetime safety the current rust layer provides for the runtime.

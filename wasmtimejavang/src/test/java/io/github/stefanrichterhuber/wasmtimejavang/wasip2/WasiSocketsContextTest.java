@@ -30,9 +30,9 @@ import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
 /**
  * Direct unit tests for {@link WasiSocketsContext}, wiring its {@code
  * "wasi-io"} dependency by hand (a real {@link WasiIoContext}) and driving
- * the protected two-phase bind/connect/listen methods directly against real
- * loopback {@code java.net} sockets -- covering the option accessors,
- * concurrent accept/connect, and error paths the end-to-end {@code
+ * the two-phase bind/connect/listen methods directly against real loopback
+ * {@code java.net} sockets -- covering the option accessors, concurrent
+ * accept/connect, and error paths the end-to-end {@code
  * WasmtimeWasiP2Test#wasip2sockettest} fixture (a TCP+UDP client only)
  * doesn't happen to exercise.
  */
@@ -59,30 +59,30 @@ public class WasiSocketsContextTest {
     }
 
     private static WitResource network(WasiSocketsContext sockets) {
-        return (WitResource) sockets.instanceNetwork(null, new Object[0])[0];
+        return sockets.instanceNetworkInstanceNetwork(null);
     }
 
     private static WitResource newTcpSocket(WasiSocketsContext sockets) {
-        WitResult result = (WitResult) sockets.createTcpSocket(null, new Object[] { new WitEnum("ipv4") })[0];
+        WitResult result = sockets.tcpCreateSocketCreateTcpSocket(null, new WitEnum("ipv4"));
         assertTrue(result.ok());
         return (WitResource) result.value();
     }
 
     private static WitResource newUdpSocket(WasiSocketsContext sockets) {
-        WitResult result = (WitResult) sockets.createUdpSocket(null, new Object[] { new WitEnum("ipv4") })[0];
+        WitResult result = sockets.udpCreateSocketCreateUdpSocket(null, new WitEnum("ipv4"));
         assertTrue(result.ok());
         return (WitResource) result.value();
     }
 
     private static void bindTcp(WasiSocketsContext sockets, WitResource socket, WitResource net, int port) {
-        WitResult bindResult = (WitResult) sockets.tcpStartBind(null, new Object[] { socket, net, loopback(port) })[0];
+        WitResult bindResult = sockets.tcpSocketStartBind(null, socket, net, loopback(port));
         assertTrue(bindResult.ok(), "start-bind failed: " + bindResult.value());
-        WitResult finishResult = (WitResult) sockets.tcpFinishBind(null, new Object[] { socket })[0];
+        WitResult finishResult = sockets.tcpSocketFinishBind(null, socket);
         assertTrue(finishResult.ok(), "finish-bind failed: " + finishResult.value());
     }
 
     private static int tcpLocalPort(WasiSocketsContext sockets, WitResource socket) {
-        WitResult result = (WitResult) sockets.tcpLocalAddress(null, new Object[] { socket })[0];
+        WitResult result = sockets.tcpSocketLocalAddress(null, socket);
         assertTrue(result.ok());
         return portOf((WitVariant) result.value());
     }
@@ -121,7 +121,9 @@ public class WasiSocketsContextTest {
         assertTrue(funcNames.contains("create-tcp-socket"));
         assertTrue(funcNames.contains("create-udp-socket"));
         assertTrue(funcNames.contains("[method]tcp-socket.accept"));
+        assertTrue(funcNames.contains("[method]tcp-socket.address-family"));
         assertTrue(funcNames.contains("[method]udp-socket.stream"));
+        assertTrue(funcNames.contains("[method]udp-socket.address-family"));
         assertTrue(funcNames.contains("resolve-addresses"));
 
         List<String> resourceNames = sockets.getImportResources().stream()
@@ -139,8 +141,7 @@ public class WasiSocketsContextTest {
     @Test
     public void createTcpSocketRejectsIpv6() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
-        Object[] result = sockets.createTcpSocket(null, new Object[] { new WitEnum("ipv6") });
-        WitResult wr = (WitResult) result[0];
+        WitResult wr = sockets.tcpCreateSocketCreateTcpSocket(null, new WitEnum("ipv6"));
         assertFalse(wr.ok());
         assertEquals(new WitEnum("not-supported"), wr.value());
     }
@@ -148,8 +149,7 @@ public class WasiSocketsContextTest {
     @Test
     public void createUdpSocketRejectsIpv6() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
-        Object[] result = sockets.createUdpSocket(null, new Object[] { new WitEnum("ipv6") });
-        WitResult wr = (WitResult) result[0];
+        WitResult wr = sockets.udpCreateSocketCreateUdpSocket(null, new WitEnum("ipv6"));
         assertFalse(wr.ok());
         assertEquals(new WitEnum("not-supported"), wr.value());
     }
@@ -165,22 +165,22 @@ public class WasiSocketsContextTest {
         WitResource server = newTcpSocket(sockets);
         bindTcp(sockets, server, net, 0);
 
-        WitResult startListen = (WitResult) sockets.tcpStartListen(null, new Object[] { server })[0];
+        WitResult startListen = sockets.tcpSocketStartListen(null, server);
         assertTrue(startListen.ok());
-        WitResult finishListen = (WitResult) sockets.tcpFinishListen(null, new Object[] { server })[0];
+        WitResult finishListen = sockets.tcpSocketFinishListen(null, server);
         assertTrue(finishListen.ok());
-        assertTrue((Boolean) sockets.tcpIsListening(null, new Object[] { server })[0]);
+        assertTrue(sockets.tcpSocketIsListening(null, server));
 
         int port = tcpLocalPort(sockets, server);
         assertTrue(port > 0);
 
         WitResource client = newTcpSocket(sockets);
         CompletableFuture<WitResult> connectFuture = CompletableFuture.supplyAsync(() -> {
-            sockets.tcpStartConnect(null, new Object[] { client, net, loopback(port) });
-            return (WitResult) sockets.tcpFinishConnect(null, new Object[] { client })[0];
+            sockets.tcpSocketStartConnect(null, client, net, loopback(port));
+            return sockets.tcpSocketFinishConnect(null, client);
         });
 
-        WitResult acceptResult = (WitResult) sockets.tcpAccept(null, new Object[] { server })[0];
+        WitResult acceptResult = sockets.tcpSocketAccept(null, server);
         assertTrue(acceptResult.ok(), "accept failed: " + acceptResult.value());
         Object[] accepted = (Object[]) acceptResult.value();
         WitResource acceptedIn = (WitResource) accepted[1];
@@ -223,7 +223,7 @@ public class WasiSocketsContextTest {
         WitResource socket = newTcpSocket(sockets);
         bindTcp(sockets, socket, net, 0);
 
-        WitResult second = (WitResult) sockets.tcpStartBind(null, new Object[] { socket, net, loopback(0) })[0];
+        WitResult second = sockets.tcpSocketStartBind(null, socket, net, loopback(0));
         assertFalse(second.ok());
         assertEquals(new WitEnum("invalid-state"), second.value());
     }
@@ -232,7 +232,7 @@ public class WasiSocketsContextTest {
     public void tcpFinishBindWithoutStartFails() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
-        WitResult result = (WitResult) sockets.tcpFinishBind(null, new Object[] { socket })[0];
+        WitResult result = sockets.tcpSocketFinishBind(null, socket);
         assertFalse(result.ok());
         assertEquals(new WitEnum("not-in-progress"), result.value());
     }
@@ -241,7 +241,7 @@ public class WasiSocketsContextTest {
     public void tcpFinishConnectWithoutStartFails() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
-        WitResult result = (WitResult) sockets.tcpFinishConnect(null, new Object[] { socket })[0];
+        WitResult result = sockets.tcpSocketFinishConnect(null, socket);
         assertFalse(result.ok());
         assertEquals(new WitEnum("not-in-progress"), result.value());
     }
@@ -259,8 +259,8 @@ public class WasiSocketsContextTest {
             deadPort = probe.getLocalPort();
         }
 
-        sockets.tcpStartConnect(null, new Object[] { client, net, loopback(deadPort) });
-        WitResult result = (WitResult) sockets.tcpFinishConnect(null, new Object[] { client })[0];
+        sockets.tcpSocketStartConnect(null, client, net, loopback(deadPort));
+        WitResult result = sockets.tcpSocketFinishConnect(null, client);
         assertFalse(result.ok());
         assertEquals(new WitEnum("connection-refused"), result.value());
     }
@@ -269,7 +269,7 @@ public class WasiSocketsContextTest {
     public void tcpAcceptOnNonListeningSocketFails() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
-        WitResult result = (WitResult) sockets.tcpAccept(null, new Object[] { socket })[0];
+        WitResult result = sockets.tcpSocketAccept(null, socket);
         assertFalse(result.ok());
         assertEquals(new WitEnum("invalid-state"), result.value());
     }
@@ -278,7 +278,7 @@ public class WasiSocketsContextTest {
     public void tcpLocalAddressBeforeBindFails() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
-        WitResult result = (WitResult) sockets.tcpLocalAddress(null, new Object[] { socket })[0];
+        WitResult result = sockets.tcpSocketLocalAddress(null, socket);
         assertFalse(result.ok());
         assertEquals(new WitEnum("invalid-state"), result.value());
     }
@@ -287,7 +287,7 @@ public class WasiSocketsContextTest {
     public void tcpRemoteAddressBeforeConnectFails() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
-        WitResult result = (WitResult) sockets.tcpRemoteAddress(null, new Object[] { socket })[0];
+        WitResult result = sockets.tcpSocketRemoteAddress(null, socket);
         assertFalse(result.ok());
         assertEquals(new WitEnum("invalid-state"), result.value());
     }
@@ -296,14 +296,21 @@ public class WasiSocketsContextTest {
     public void tcpIsListeningFalseByDefault() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
-        assertFalse((Boolean) sockets.tcpIsListening(null, new Object[] { socket })[0]);
+        assertFalse(sockets.tcpSocketIsListening(null, socket));
+    }
+
+    @Test
+    public void tcpAddressFamilyIsAlwaysIpv4() {
+        WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
+        WitResource socket = newTcpSocket(sockets);
+        assertEquals(new WitEnum("ipv4"), sockets.tcpSocketAddressFamily(null, socket));
     }
 
     @Test
     public void tcpSetListenBacklogSize() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
-        WitResult result = (WitResult) sockets.tcpSetListenBacklogSize(null, new Object[] { socket, 16L })[0];
+        WitResult result = sockets.tcpSocketSetListenBacklogSize(null, socket, 16L);
         assertTrue(result.ok());
     }
 
@@ -312,14 +319,14 @@ public class WasiSocketsContextTest {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
 
-        WitResult getBefore = (WitResult) sockets.tcpKeepAliveEnabled(null, new Object[] { socket })[0];
+        WitResult getBefore = sockets.tcpSocketKeepAliveEnabled(null, socket);
         assertTrue(getBefore.ok());
         assertEquals(Boolean.FALSE, getBefore.value());
 
-        WitResult set = (WitResult) sockets.tcpSetKeepAliveEnabled(null, new Object[] { socket, true })[0];
+        WitResult set = sockets.tcpSocketSetKeepAliveEnabled(null, socket, true);
         assertTrue(set.ok());
 
-        WitResult getAfter = (WitResult) sockets.tcpKeepAliveEnabled(null, new Object[] { socket })[0];
+        WitResult getAfter = sockets.tcpSocketKeepAliveEnabled(null, socket);
         assertTrue(getAfter.ok());
         assertEquals(Boolean.TRUE, getAfter.value());
     }
@@ -329,26 +336,22 @@ public class WasiSocketsContextTest {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
 
-        assertTrue(((WitResult) sockets.tcpSetKeepAliveIdleTime(null, new Object[] { socket, 5_000_000_000L })[0])
-                .ok());
-        assertEquals(5_000_000_000L,
-                ((WitResult) sockets.tcpKeepAliveIdleTime(null, new Object[] { socket })[0]).value());
+        assertTrue(sockets.tcpSocketSetKeepAliveIdleTime(null, socket, 5_000_000_000L).ok());
+        assertEquals(5_000_000_000L, sockets.tcpSocketKeepAliveIdleTime(null, socket).value());
 
-        assertTrue(((WitResult) sockets.tcpSetKeepAliveInterval(null, new Object[] { socket, 1_000_000_000L })[0])
-                .ok());
-        assertEquals(1_000_000_000L,
-                ((WitResult) sockets.tcpKeepAliveInterval(null, new Object[] { socket })[0]).value());
+        assertTrue(sockets.tcpSocketSetKeepAliveInterval(null, socket, 1_000_000_000L).ok());
+        assertEquals(1_000_000_000L, sockets.tcpSocketKeepAliveInterval(null, socket).value());
 
-        assertTrue(((WitResult) sockets.tcpSetKeepAliveCount(null, new Object[] { socket, 3 })[0]).ok());
-        assertEquals(3, ((WitResult) sockets.tcpKeepAliveCount(null, new Object[] { socket })[0]).value());
+        assertTrue(sockets.tcpSocketSetKeepAliveCount(null, socket, 3).ok());
+        assertEquals(3, sockets.tcpSocketKeepAliveCount(null, socket).value());
     }
 
     @Test
     public void tcpHopLimitRoundTrips() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
-        assertTrue(((WitResult) sockets.tcpSetHopLimit(null, new Object[] { socket, 32 })[0]).ok());
-        assertEquals(32, ((WitResult) sockets.tcpHopLimit(null, new Object[] { socket })[0]).value());
+        assertTrue(sockets.tcpSocketSetHopLimit(null, socket, 32).ok());
+        assertEquals(32, sockets.tcpSocketHopLimit(null, socket).value());
     }
 
     @Test
@@ -356,22 +359,22 @@ public class WasiSocketsContextTest {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
 
-        assertTrue(((WitResult) sockets.tcpSetReceiveBufferSize(null, new Object[] { socket, 8192L })[0]).ok());
-        assertEquals(8192L, ((WitResult) sockets.tcpReceiveBufferSize(null, new Object[] { socket })[0]).value());
+        assertTrue(sockets.tcpSocketSetReceiveBufferSize(null, socket, 8192L).ok());
+        assertEquals(8192L, sockets.tcpSocketReceiveBufferSize(null, socket).value());
 
-        assertTrue(((WitResult) sockets.tcpSetSendBufferSize(null, new Object[] { socket, 4096L })[0]).ok());
-        assertEquals(4096L, ((WitResult) sockets.tcpSendBufferSize(null, new Object[] { socket })[0]).value());
+        assertTrue(sockets.tcpSocketSetSendBufferSize(null, socket, 4096L).ok());
+        assertEquals(4096L, sockets.tcpSocketSendBufferSize(null, socket).value());
     }
 
     @Test
     public void tcpOptionAccessorsOnUnknownSocketFail() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource bogus = new WitResource(null, 999, true);
-        assertFalse(((WitResult) sockets.tcpKeepAliveEnabled(null, new Object[] { bogus })[0]).ok());
-        assertFalse(((WitResult) sockets.tcpHopLimit(null, new Object[] { bogus })[0]).ok());
-        assertFalse(((WitResult) sockets.tcpReceiveBufferSize(null, new Object[] { bogus })[0]).ok());
-        assertFalse(((WitResult) sockets.tcpSendBufferSize(null, new Object[] { bogus })[0]).ok());
-        assertFalse((Boolean) sockets.tcpIsListening(null, new Object[] { bogus })[0]);
+        assertFalse(sockets.tcpSocketKeepAliveEnabled(null, bogus).ok());
+        assertFalse(sockets.tcpSocketHopLimit(null, bogus).ok());
+        assertFalse(sockets.tcpSocketReceiveBufferSize(null, bogus).ok());
+        assertFalse(sockets.tcpSocketSendBufferSize(null, bogus).ok());
+        assertFalse(sockets.tcpSocketIsListening(null, bogus));
     }
 
     @Test
@@ -379,8 +382,7 @@ public class WasiSocketsContextTest {
         WasiIoContext io = new WasiIoContext();
         WasiSocketsContext sockets = newLinkedSockets(io);
         WitResource socket = newTcpSocket(sockets);
-        Object[] result = sockets.tcpSubscribe(null, new Object[] { socket });
-        WitResource pollable = (WitResource) result[0];
+        WitResource pollable = sockets.tcpSocketSubscribe(null, socket);
         assertEquals("pollable", pollable.resourceName());
         assertEquals(WasiIoResources.ALWAYS_READY, io.getPollableDeadline(pollable.rep()));
     }
@@ -389,8 +391,8 @@ public class WasiSocketsContextTest {
     public void tcpShutdownOnUnconnectedSocketFails() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newTcpSocket(sockets);
-        Object[] result = sockets.tcpShutdown(null, new Object[] { socket, new WitEnum("both") });
-        assertFalse(((WitResult) result[0]).ok());
+        WitResult result = sockets.tcpSocketShutdown(null, socket, new WitEnum("both"));
+        assertFalse(result.ok());
     }
 
     // ---- UDP ------------------------------------------------------------------
@@ -403,41 +405,40 @@ public class WasiSocketsContextTest {
         WitResource udpA = newUdpSocket(sockets);
         WitResource udpB = newUdpSocket(sockets);
 
-        assertTrue(((WitResult) sockets.udpStartBind(null, new Object[] { udpA, net, loopback(0) })[0]).ok());
-        assertTrue(((WitResult) sockets.udpFinishBind(null, new Object[] { udpA })[0]).ok());
-        assertTrue(((WitResult) sockets.udpStartBind(null, new Object[] { udpB, net, loopback(0) })[0]).ok());
-        assertTrue(((WitResult) sockets.udpFinishBind(null, new Object[] { udpB })[0]).ok());
+        assertTrue(sockets.udpSocketStartBind(null, udpA, net, loopback(0)).ok());
+        assertTrue(sockets.udpSocketFinishBind(null, udpA).ok());
+        assertTrue(sockets.udpSocketStartBind(null, udpB, net, loopback(0)).ok());
+        assertTrue(sockets.udpSocketFinishBind(null, udpB).ok());
 
-        WitResult localA = (WitResult) sockets.udpLocalAddress(null, new Object[] { udpA })[0];
-        WitResult localB = (WitResult) sockets.udpLocalAddress(null, new Object[] { udpB })[0];
+        WitResult localA = sockets.udpSocketLocalAddress(null, udpA);
+        WitResult localB = sockets.udpSocketLocalAddress(null, udpB);
         assertTrue(localA.ok());
         assertTrue(localB.ok());
         int portA = portOf((WitVariant) localA.value());
         int portB = portOf((WitVariant) localB.value());
 
-        WitResult streamA = (WitResult) sockets.udpStream(null, new Object[] { udpA, Optional.of(loopback(portB)) })[0];
+        WitResult streamA = sockets.udpSocketStream(null, udpA, Optional.of(loopback(portB)));
         assertTrue(streamA.ok());
         Object[] streamATuple = (Object[]) streamA.value();
         WitResource outA = (WitResource) streamATuple[1];
 
-        WitResult streamB = (WitResult) sockets.udpStream(null, new Object[] { udpB, Optional.empty() })[0];
+        WitResult streamB = sockets.udpSocketStream(null, udpB, Optional.empty());
         assertTrue(streamB.ok());
         Object[] streamBTuple = (Object[]) streamB.value();
         WitResource inB = (WitResource) streamBTuple[0];
 
-        WitResult remoteA = (WitResult) sockets.udpRemoteAddress(null, new Object[] { udpA })[0];
+        WitResult remoteA = sockets.udpSocketRemoteAddress(null, udpA);
         assertTrue(remoteA.ok());
         assertEquals(portB, portOf((WitVariant) remoteA.value()));
 
         Map<String, Object> outgoingDatagram = new LinkedHashMap<>();
         outgoingDatagram.put("data", "hello udp".getBytes("UTF-8"));
         outgoingDatagram.put("remote-address", Optional.<WitVariant>empty());
-        WitResult sendResult = (WitResult) sockets.outgoingDatagramSend(null,
-                new Object[] { outA, List.of(outgoingDatagram) })[0];
+        WitResult sendResult = sockets.outgoingDatagramStreamSend(null, outA, List.of(outgoingDatagram));
         assertTrue(sendResult.ok(), "send failed: " + sendResult.value());
         assertEquals(1L, sendResult.value());
 
-        WitResult receiveResult = (WitResult) sockets.incomingDatagramReceive(null, new Object[] { inB, 1L })[0];
+        WitResult receiveResult = sockets.incomingDatagramStreamReceive(null, inB, 1L);
         assertTrue(receiveResult.ok());
         @SuppressWarnings("unchecked")
         List<Object> received = (List<Object>) receiveResult.value();
@@ -453,7 +454,7 @@ public class WasiSocketsContextTest {
     public void udpFinishBindWithoutStartFails() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newUdpSocket(sockets);
-        WitResult result = (WitResult) sockets.udpFinishBind(null, new Object[] { socket })[0];
+        WitResult result = sockets.udpSocketFinishBind(null, socket);
         assertFalse(result.ok());
         assertEquals(new WitEnum("not-in-progress"), result.value());
     }
@@ -462,7 +463,7 @@ public class WasiSocketsContextTest {
     public void udpStreamBeforeBindFails() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newUdpSocket(sockets);
-        WitResult result = (WitResult) sockets.udpStream(null, new Object[] { socket, Optional.empty() })[0];
+        WitResult result = sockets.udpSocketStream(null, socket, Optional.empty());
         assertFalse(result.ok());
         assertEquals(new WitEnum("invalid-state"), result.value());
     }
@@ -472,30 +473,37 @@ public class WasiSocketsContextTest {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource net = network(sockets);
         WitResource socket = newUdpSocket(sockets);
-        assertTrue(((WitResult) sockets.udpStartBind(null, new Object[] { socket, net, loopback(0) })[0]).ok());
-        assertTrue(((WitResult) sockets.udpFinishBind(null, new Object[] { socket })[0]).ok());
+        assertTrue(sockets.udpSocketStartBind(null, socket, net, loopback(0)).ok());
+        assertTrue(sockets.udpSocketFinishBind(null, socket).ok());
 
-        WitResult result = (WitResult) sockets.udpRemoteAddress(null, new Object[] { socket })[0];
+        WitResult result = sockets.udpSocketRemoteAddress(null, socket);
         assertFalse(result.ok());
         assertEquals(new WitEnum("invalid-state"), result.value());
+    }
+
+    @Test
+    public void udpAddressFamilyIsAlwaysIpv4() {
+        WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
+        WitResource socket = newUdpSocket(sockets);
+        assertEquals(new WitEnum("ipv4"), sockets.udpSocketAddressFamily(null, socket));
     }
 
     @Test
     public void udpUnicastHopLimitRoundTrips() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newUdpSocket(sockets);
-        assertTrue(((WitResult) sockets.udpSetUnicastHopLimit(null, new Object[] { socket, 16 })[0]).ok());
-        assertEquals(16, ((WitResult) sockets.udpUnicastHopLimit(null, new Object[] { socket })[0]).value());
+        assertTrue(sockets.udpSocketSetUnicastHopLimit(null, socket, 16).ok());
+        assertEquals(16, sockets.udpSocketUnicastHopLimit(null, socket).value());
     }
 
     @Test
     public void udpBufferSizesRoundTripBeforeBind() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource socket = newUdpSocket(sockets);
-        assertTrue(((WitResult) sockets.udpSetReceiveBufferSize(null, new Object[] { socket, 2048L })[0]).ok());
-        assertEquals(2048L, ((WitResult) sockets.udpReceiveBufferSize(null, new Object[] { socket })[0]).value());
-        assertTrue(((WitResult) sockets.udpSetSendBufferSize(null, new Object[] { socket, 1024L })[0]).ok());
-        assertEquals(1024L, ((WitResult) sockets.udpSendBufferSize(null, new Object[] { socket })[0]).value());
+        assertTrue(sockets.udpSocketSetReceiveBufferSize(null, socket, 2048L).ok());
+        assertEquals(2048L, sockets.udpSocketReceiveBufferSize(null, socket).value());
+        assertTrue(sockets.udpSocketSetSendBufferSize(null, socket, 1024L).ok());
+        assertEquals(1024L, sockets.udpSocketSendBufferSize(null, socket).value());
     }
 
     @Test
@@ -503,8 +511,7 @@ public class WasiSocketsContextTest {
         WasiIoContext io = new WasiIoContext();
         WasiSocketsContext sockets = newLinkedSockets(io);
         WitResource socket = newUdpSocket(sockets);
-        Object[] result = sockets.udpSubscribe(null, new Object[] { socket });
-        WitResource pollable = (WitResource) result[0];
+        WitResource pollable = sockets.udpSocketSubscribe(null, socket);
         assertEquals(WasiIoResources.ALWAYS_READY, io.getPollableDeadline(pollable.rep()));
     }
 
@@ -513,13 +520,13 @@ public class WasiSocketsContextTest {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource net = network(sockets);
         WitResource socket = newUdpSocket(sockets);
-        assertTrue(((WitResult) sockets.udpStartBind(null, new Object[] { socket, net, loopback(0) })[0]).ok());
-        assertTrue(((WitResult) sockets.udpFinishBind(null, new Object[] { socket })[0]).ok());
-        WitResult stream = (WitResult) sockets.udpStream(null, new Object[] { socket, Optional.empty() })[0];
+        assertTrue(sockets.udpSocketStartBind(null, socket, net, loopback(0)).ok());
+        assertTrue(sockets.udpSocketFinishBind(null, socket).ok());
+        WitResult stream = sockets.udpSocketStream(null, socket, Optional.empty());
         Object[] tuple = (Object[]) stream.value();
         WitResource out = (WitResource) tuple[1];
 
-        WitResult checkSend = (WitResult) sockets.outgoingDatagramCheckSend(null, new Object[] { out })[0];
+        WitResult checkSend = sockets.outgoingDatagramStreamCheckSend(null, out);
         assertTrue(checkSend.ok());
         assertTrue((Long) checkSend.value() > 0);
     }
@@ -529,16 +536,16 @@ public class WasiSocketsContextTest {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource net = network(sockets);
         WitResource socket = newUdpSocket(sockets);
-        assertTrue(((WitResult) sockets.udpStartBind(null, new Object[] { socket, net, loopback(0) })[0]).ok());
-        assertTrue(((WitResult) sockets.udpFinishBind(null, new Object[] { socket })[0]).ok());
-        WitResult stream = (WitResult) sockets.udpStream(null, new Object[] { socket, Optional.empty() })[0];
+        assertTrue(sockets.udpSocketStartBind(null, socket, net, loopback(0)).ok());
+        assertTrue(sockets.udpSocketFinishBind(null, socket).ok());
+        WitResult stream = sockets.udpSocketStream(null, socket, Optional.empty());
         Object[] tuple = (Object[]) stream.value();
         WitResource out = (WitResource) tuple[1];
 
         Map<String, Object> datagram = new LinkedHashMap<>();
         datagram.put("data", "x".getBytes("UTF-8"));
         datagram.put("remote-address", Optional.<WitVariant>empty());
-        WitResult result = (WitResult) sockets.outgoingDatagramSend(null, new Object[] { out, List.of(datagram) })[0];
+        WitResult result = sockets.outgoingDatagramStreamSend(null, out, List.of(datagram));
         assertFalse(result.ok());
         assertEquals(new WitEnum("invalid-argument"), result.value());
     }
@@ -550,13 +557,13 @@ public class WasiSocketsContextTest {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource net = network(sockets);
 
-        WitResult resolveResult = (WitResult) sockets.resolveAddresses(null, new Object[] { net, "localhost" })[0];
+        WitResult resolveResult = sockets.ipNameLookupResolveAddresses(null, net, "localhost");
         assertTrue(resolveResult.ok());
         WitResource stream = (WitResource) resolveResult.value();
 
         boolean foundAny = false;
         while (true) {
-            WitResult next = (WitResult) sockets.resolveNextAddress(null, new Object[] { stream })[0];
+            WitResult next = sockets.resolveAddressStreamResolveNextAddress(null, stream);
             assertTrue(next.ok());
             @SuppressWarnings("unchecked")
             Optional<WitVariant> address = (Optional<WitVariant>) next.value();
@@ -573,8 +580,7 @@ public class WasiSocketsContextTest {
     public void resolveAddressesOnUnknownHostFails() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
         WitResource net = network(sockets);
-        WitResult result = (WitResult) sockets.resolveAddresses(null,
-                new Object[] { net, "this.host.should.not.resolve.invalid" })[0];
+        WitResult result = sockets.ipNameLookupResolveAddresses(null, net, "this.host.should.not.resolve.invalid");
         assertFalse(result.ok());
         assertEquals(new WitEnum("name-unresolvable"), result.value());
     }
@@ -582,8 +588,7 @@ public class WasiSocketsContextTest {
     @Test
     public void resolveNextAddressOnUnknownStreamFails() {
         WasiSocketsContext sockets = newLinkedSockets(new WasiIoContext());
-        WitResult result = (WitResult) sockets.resolveNextAddress(null,
-                new Object[] { new WitResource(null, 999, true) })[0];
+        WitResult result = sockets.resolveAddressStreamResolveNextAddress(null, new WitResource(null, 999, true));
         assertFalse(result.ok());
         assertEquals(new WitEnum("invalid-state"), result.value());
     }
@@ -592,8 +597,7 @@ public class WasiSocketsContextTest {
     public void resolveAddressSubscribeReturnsPollable() {
         WasiIoContext io = new WasiIoContext();
         WasiSocketsContext sockets = newLinkedSockets(io);
-        Object[] result = sockets.resolveAddressSubscribe(null, new Object[0]);
-        WitResource pollable = (WitResource) result[0];
+        WitResource pollable = sockets.resolveAddressStreamSubscribe(null, new WitResource(null, 1, true));
         assertEquals(WasiIoResources.ALWAYS_READY, io.getPollableDeadline(pollable.rep()));
     }
 
@@ -605,15 +609,15 @@ public class WasiSocketsContextTest {
         WitResource net = network(sockets);
         WitResource server = newTcpSocket(sockets);
         bindTcp(sockets, server, net, 0);
-        assertTrue(((WitResult) sockets.tcpStartListen(null, new Object[] { server })[0]).ok());
-        assertTrue(((WitResult) sockets.tcpFinishListen(null, new Object[] { server })[0]).ok());
+        assertTrue(sockets.tcpSocketStartListen(null, server).ok());
+        assertTrue(sockets.tcpSocketFinishListen(null, server).ok());
         int port = tcpLocalPort(sockets, server);
 
         List<ComponentImportResourceHolder> resources = importResourceHolders(sockets);
         ResourceDestructorLike dropTcpSocket = findDestructor(resources, "wasi:sockets/tcp", "tcp-socket");
 
         try (Socket ignored = new Socket("127.0.0.1", port)) {
-            WitResult acceptResult = (WitResult) sockets.tcpAccept(null, new Object[] { server })[0];
+            WitResult acceptResult = sockets.tcpSocketAccept(null, server);
             assertTrue(acceptResult.ok());
         }
 

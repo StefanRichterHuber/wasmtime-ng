@@ -12,12 +12,23 @@ import io.github.stefanrichterhuber.witparser.WitTypeKind;
 import io.github.stefanrichterhuber.witparser.WitValueType;
 
 /**
- * Generates an abstract {@code WasmComponentContext} implementation from a
- * single {@link WitInterface}: all of the interface-name/version/
- * {@code getImportFunctions()}/{@code getImportResources()} plumbing is
- * filled in concretely, and one abstract, typed method is emitted per WIT
- * function (plus one abstract destructor per resource) -- callers extend the
- * generated class and only implement those.
+ * Generates a {@code WasmComponentContext}-extending interface from a single
+ * {@link WitInterface}: all of the interface-name/{@code getImportFunctions()}/
+ * {@code getImportResources()} plumbing is filled in as default methods, and
+ * one abstract, typed method is emitted per WIT function (plus one abstract
+ * destructor per resource) -- callers {@code implements} the generated
+ * interface (any number of them, at once, on one class -- this is why it's
+ * an interface and not an abstract class: a bundle covering several WIT
+ * interfaces on one Java class, like the hand-written {@code wasip2}
+ * contexts, can't {@code extends} more than one abstract base) and only
+ * implement those.
+ * <br>
+ * Deliberately does not model version state ({@code withVersion()}/
+ * {@code getVersion()}/min/max) -- interfaces can't hold instance fields, so
+ * that stays the implementing class's own responsibility, exactly as today;
+ * the generated {@code versioned()} helper calls the inherited
+ * {@code getVersion()} (dispatching to whatever the concrete class
+ * ultimately overrides it with) rather than reading a field.
  * <br>
  * Every {@link WitTypeKind} maps to a fixed Java type (see {@link #javaType}):
  * nested structure (record field types, variant payload types, etc.) isn't
@@ -31,24 +42,24 @@ public final class WitCodeGenerator {
     }
 
     /**
-     * The generated class name for a given WIT interface, e.g.
-     * {@code "AbstractGreetContext"} for {@code "my:custom/greet"}.
+     * The generated interface name for a given WIT interface, e.g.
+     * {@code "GreetContext"} for {@code "my:custom/greet"}.
      *
      * @param interfaceName Fully-qualified WIT interface name, as returned by
      *                       {@code WitInterface.name()}.
-     * @return The class name to generate.
+     * @return The interface name to generate.
      */
     public static String className(String interfaceName) {
-        return "Abstract" + pascalCase(simpleName(interfaceName)) + "Context";
+        return pascalCase(simpleName(interfaceName)) + "Context";
     }
 
     /**
-     * Generates the Java source of an abstract {@code WasmComponentContext}
-     * implementation for the given WIT interface.
+     * Generates the Java source of a {@code WasmComponentContext}-extending
+     * interface for the given WIT interface.
      *
-     * @param targetPackage Package the generated class is placed in.
-     * @param iface         The interface to generate a base class for.
-     * @return The complete Java source of the generated class, including
+     * @param targetPackage Package the generated interface is placed in.
+     * @param iface         The interface to generate a contract for.
+     * @return The complete Java source of the generated interface, including
      *         package declaration and imports.
      */
     public static String generate(String targetPackage, WitInterface iface) {
@@ -62,7 +73,7 @@ public final class WitCodeGenerator {
         List<WitFunction> functions = iface.functions();
         for (int i = 0; i < functions.size(); i++) {
             WitFunction function = functions.get(i);
-            String methodName = methodName(function.name());
+            String methodName = methodName(function.name(), simpleName);
             String implName = methodName + "Impl";
 
             importFunctionEntries.append("                new ComponentImportFunction(versioned(), \"")
@@ -78,7 +89,7 @@ public final class WitCodeGenerator {
                 paramList.append(", ").append(javaType(param.type())).append(' ')
                         .append(camelCase(param.name()));
             }
-            abstractMethods.append("    protected abstract ").append(returnType).append(' ')
+            abstractMethods.append("    ").append(returnType).append(' ')
                     .append(methodName).append('(').append(paramList).append(");\n\n");
 
             StringBuilder implBody = new StringBuilder();
@@ -111,7 +122,7 @@ public final class WitCodeGenerator {
         for (int i = 0; i < resources.size(); i++) {
             String resourceName = resources.get(i);
             String pascalResourceName = pascalCase(resourceName);
-            resourceDestructors.append("    protected abstract void drop").append(pascalResourceName)
+            resourceDestructors.append("    void drop").append(pascalResourceName)
                     .append("(int rep);\n\n");
             importResourceEntries.append("                new ComponentImportResource(versioned(), \"")
                     .append(resourceName).append("\", this::drop").append(pascalResourceName).append(")");
@@ -130,54 +141,40 @@ public final class WitCodeGenerator {
                 import java.util.Set;
                 %s
 
-                import io.github.stefanrichterhuber.wasmtimejavang.SemanticVersion;
                 import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
                 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance;
 
                 /**
                  * Generated from WIT interface "%s" by wit-codegen-maven-plugin.
-                 * Do not edit directly -- extend this class and implement the
-                 * abstract methods instead.
+                 * Do not edit directly -- implement this interface (alongside any others,
+                 * on the same class if they belong to the same bundle) instead.
                  */
-                public abstract class %s implements WasmComponentContext {
-                    private static final String INTERFACE = "%s";
-
-                    private SemanticVersion version = DEFAULT_VERSION;
+                public interface %s extends WasmComponentContext {
+                    String INTERFACE = "%s";
 
                     @Override
-                    public String name() {
+                    default String name() {
                         return "%s";
                     }
 
                     private String versioned() {
-                        return INTERFACE + "@" + version;
+                        return INTERFACE + "@" + getVersion();
                     }
 
                     @Override
-                    public List<ComponentImportFunction> getImportFunctions() {
+                    default List<ComponentImportFunction> getImportFunctions() {
                         return List.of(
                 %s            );
                     }
 
                     @Override
-                    public List<ComponentImportResource> getImportResources() {
+                    default List<ComponentImportResource> getImportResources() {
                         return %s;
                     }
 
                     @Override
-                    public Set<String> getProvidedInterfaces() {
+                    default Set<String> getProvidedInterfaces() {
                         return Set.of(INTERFACE);
-                    }
-
-                    @Override
-                    public WasmComponentContext withVersion(SemanticVersion version) {
-                        this.version = version;
-                        return this;
-                    }
-
-                    @Override
-                    public SemanticVersion getVersion() {
-                        return version;
                     }
 
                 %s%s%s}
@@ -243,19 +240,36 @@ public final class WitCodeGenerator {
     /**
      * Converts a WIT function name -- possibly the bracketed form
      * {@code wit-parser} itself produces for resource methods (e.g.
-     * {@code "[method]input-stream.read"}) -- into a Java method name,
-     * folding the resource name in (e.g. {@code "inputStreamRead"}) so
-     * same-named methods on different resources in one interface don't
-     * collide, matching the hand-written {@code wasip2} contexts' own
-     * naming convention.
+     * {@code "[method]input-stream.read"}) -- into a Java method name.
+     * <br>
+     * A resource method folds the resource name in (e.g.
+     * {@code "inputStreamRead"}) so same-named methods on different
+     * resources in one interface don't collide, matching the hand-written
+     * {@code wasip2} contexts' own naming convention. A free (non-resource)
+     * function instead folds the *owning interface's* bare name in (e.g.
+     * {@code "monotonicClockNow"}/{@code "wallClockNow"} rather than two
+     * unqualified {@code now}s) -- sibling WIT interfaces are routinely
+     * implemented together on one Java class (see the {@code wasip2}
+     * contexts, each bundling several interfaces for shared state), and two
+     * interfaces declaring a same-named free function with unrelated return
+     * types (e.g. {@code wasi:clocks/monotonic-clock}'s {@code long now()}
+     * vs. {@code wasi:clocks/wall-clock}'s {@code datetime now()}) can't
+     * both be satisfied by one override -- Java requires covariant, not
+     * merely coincidentally-identical, return types across implemented
+     * interfaces. Folding the interface name in for every free function
+     * (not just the ones known to collide today) keeps this correct for
+     * whatever WIT world a caller points the plugin at next, not just the
+     * ones already inventoried.
+     *
+     * @param ifaceSimpleName The bare (non-package-qualified) interface name,
+     *                        e.g. {@code "monotonic-clock"}.
      */
-    private static String methodName(String witFuncName) {
-        String stripped = witFuncName;
-        int bracketEnd = stripped.indexOf(']');
+    private static String methodName(String witFuncName, String ifaceSimpleName) {
+        int bracketEnd = witFuncName.indexOf(']');
         if (bracketEnd >= 0) {
-            stripped = stripped.substring(bracketEnd + 1);
+            return camelCase(witFuncName.substring(bracketEnd + 1).replace('.', '-'));
         }
-        return camelCase(stripped.replace('.', '-'));
+        return camelCase(ifaceSimpleName + "-" + witFuncName);
     }
 
     private static String javaType(WitValueType type) {

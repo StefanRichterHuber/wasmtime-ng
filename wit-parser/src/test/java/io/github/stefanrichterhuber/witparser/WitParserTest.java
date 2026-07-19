@@ -77,7 +77,16 @@ class WitParserTest {
 
         WitInterface streams = interfaces.stream().filter(i -> i.name().equals("wasi:io/streams"))
                 .findFirst().orElseThrow();
-        assertEquals(Set.of("input-stream", "output-stream"), Set.copyOf(streams.resources()));
+        // "pollable" and "error" aren't defined by wasi:io/streams (they belong to wasi:io/poll
+        // and wasi:io/error respectively), but [method]{input,output}-stream.subscribe return a
+        // pollable and blocking-read's result<_, stream-error> reaches "error" through the
+        // stream-error variant's last-operation-failed(own<error>) case, so both must be
+        // reported here too -- WasmtimeComponentLinker#registerImports needs a destructor
+        // registered per interface for every resource type that interface's own functions
+        // construct/accept/return, however deeply nested, not just the ones it defines (see
+        // wit-parser-binding's build_interface/collect_resource_names for the full rationale).
+        assertEquals(Set.of("input-stream", "output-stream", "pollable", "error"),
+                Set.copyOf(streams.resources()));
 
         WitInterface filesystemTypes = interfaces.stream()
                 .filter(i -> i.name().equals("wasi:filesystem/types")).findFirst().orElseThrow();
@@ -122,7 +131,12 @@ class WitParserTest {
 
         WitInterface tcp = interfaces.stream().filter(i -> i.name().equals("wasi:sockets/tcp"))
                 .findFirst().orElseThrow();
-        assertEquals(List.of("tcp-socket"), tcp.resources());
+        // "network" (borrowed by create calls elsewhere, not by tcp itself) and "pollable"
+        // (returned by [method]tcp-socket.subscribe) are both foreign to this interface but
+        // still referenced by handle -- see the "wasi:io/streams" resource-set comment above in
+        // resolvesWasiCliCommandWorld for why they must show up here too.
+        assertEquals(Set.of("tcp-socket", "network", "pollable", "input-stream", "output-stream"),
+                Set.copyOf(tcp.resources()));
 
         // tcp-socket.accept -> result<tuple<own<tcp-socket>, own<input-stream>, own<output-stream>>, error-code>
         WitFunction accept = tcp.functions().stream()

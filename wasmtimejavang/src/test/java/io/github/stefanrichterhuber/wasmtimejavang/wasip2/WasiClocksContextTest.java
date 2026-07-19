@@ -62,11 +62,15 @@ public class WasiClocksContextTest {
         assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(monotonic)
                 && f.funcName().equals("now")));
         assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(monotonic)
+                && f.funcName().equals("resolution")));
+        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(monotonic)
                 && f.funcName().equals("subscribe-instant")));
         assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(monotonic)
                 && f.funcName().equals("subscribe-duration")));
         assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(wall)
                 && f.funcName().equals("now")));
+        assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(wall)
+                && f.funcName().equals("resolution")));
     }
 
     @Test
@@ -90,12 +94,17 @@ public class WasiClocksContextTest {
     public void monotonicNowReturnsSystemNanoTime() {
         WasiClocksContext clocks = newLinkedClocks(new WasiIoContext());
         long before = System.nanoTime();
-        Object[] result = clocks.monotonicNow(null, new Object[0]);
+        long reported = clocks.monotonicClockNow(null);
         long after = System.nanoTime();
 
-        long reported = (Long) result[0];
         assertTrue(reported >= before && reported <= after,
                 "expected " + reported + " to be between " + before + " and " + after);
+    }
+
+    @Test
+    public void monotonicResolutionReturnsOneNanosecond() {
+        WasiClocksContext clocks = newLinkedClocks(new WasiIoContext());
+        assertEquals(1L, clocks.monotonicClockResolution(null));
     }
 
     @Test
@@ -104,8 +113,7 @@ public class WasiClocksContextTest {
         WasiClocksContext clocks = newLinkedClocks(io);
 
         long instant = System.nanoTime() + 5_000_000_000L;
-        Object[] result = clocks.subscribeInstant(null, new Object[] { instant });
-        WitResource pollable = (WitResource) result[0];
+        WitResource pollable = clocks.monotonicClockSubscribeInstant(null, instant);
 
         assertEquals("pollable", pollable.resourceName());
         assertTrue(pollable.owned());
@@ -119,9 +127,8 @@ public class WasiClocksContextTest {
 
         long durationNanos = 2_000_000_000L;
         long before = System.nanoTime();
-        Object[] result = clocks.subscribeDuration(null, new Object[] { durationNanos });
+        WitResource pollable = clocks.monotonicClockSubscribeDuration(null, durationNanos);
         long after = System.nanoTime();
-        WitResource pollable = (WitResource) result[0];
 
         long deadline = io.getPollableDeadline(pollable.rep());
         assertTrue(deadline >= before + durationNanos && deadline <= after + durationNanos,
@@ -132,16 +139,22 @@ public class WasiClocksContextTest {
     public void wallClockNowReturnsPlausibleDatetimeRecord() {
         WasiClocksContext clocks = newLinkedClocks(new WasiIoContext());
         long beforeMillis = System.currentTimeMillis();
-        Object[] result = clocks.wallClockNow(null, new Object[0]);
+        Map<String, Object> datetime = clocks.wallClockNow(null);
         long afterMillis = System.currentTimeMillis();
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> datetime = (Map<String, Object>) result[0];
         long seconds = (Long) datetime.get("seconds");
         int nanoseconds = (Integer) datetime.get("nanoseconds");
 
         assertTrue(seconds >= beforeMillis / 1000L && seconds <= afterMillis / 1000L + 1);
         assertTrue(nanoseconds >= 0 && nanoseconds < 1_000_000_000);
+    }
+
+    @Test
+    public void wallClockResolutionReturnsOneMillisecond() {
+        WasiClocksContext clocks = newLinkedClocks(new WasiIoContext());
+        Map<String, Object> resolution = clocks.wallClockResolution(null);
+        assertEquals(0L, resolution.get("seconds"));
+        assertEquals(1_000_000, resolution.get("nanoseconds"));
     }
 
     /**

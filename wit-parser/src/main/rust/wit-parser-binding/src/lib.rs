@@ -59,9 +59,11 @@ struct ParsedFunction {
     result: Option<(String, Option<String>)>,
 }
 
-/// A WIT interface resolved from a `.wit` file/directory or a world, with
-/// its own resource types tracked separately from its functions (covers
-/// resources with zero methods).
+/// A WIT interface resolved from a `.wit` file/directory or a world, with its
+/// resource types tracked separately from its functions -- every resource
+/// type it defines *or* merely references via a handle (own/borrow) in a
+/// function signature, covering both resources with zero methods and foreign
+/// resources only ever borrowed (see `build_interface`).
 struct ParsedInterface {
     name: String,
     functions: Vec<ParsedFunction>,
@@ -135,6 +137,64 @@ fn classify(resolve: &Resolve, ty: &Type) -> anyhow::Result<(&'static str, Optio
     })
 }
 
+/// Recursively walks `ty` collecting the name of every resource type reachable through a
+/// handle (`own`/`borrow`), however deeply nested inside tuples/lists/options/results/
+/// records/variants -- e.g. `result<tuple<own<tcp-socket>, own<input-stream>, own<output-
+/// stream>>, error-code>` must yield `tcp-socket`, `input-stream` *and* `output-stream`, not
+/// just stop at "this is a result/tuple". Used by `build_interface` to find every resource an
+/// interface's functions reference by handle, not only the ones classify() reports at the
+/// type's own top level (which resolve to plain "tuple"/"result"/... tags with no resource
+/// name, since classify() deliberately doesn't drill into compound shapes for the type-tag
+/// mapping itself).
+fn collect_resource_names(resolve: &Resolve, ty: &Type, seen: &mut HashSet<String>, out: &mut Vec<String>) {
+    let Type::Id(id) = ty else {
+        return;
+    };
+    let def = &resolve.types[*id];
+    match &def.kind {
+        TypeDefKind::Type(inner) => collect_resource_names(resolve, inner, seen, out),
+        TypeDefKind::Handle(handle) => {
+            let resource_id = match handle {
+                Handle::Own(id) => *id,
+                Handle::Borrow(id) => *id,
+            };
+            if let Some(name) = &resolve.types[resource_id].name {
+                if seen.insert(name.clone()) {
+                    out.push(name.clone());
+                }
+            }
+        }
+        TypeDefKind::Tuple(tuple) => {
+            for elem in &tuple.types {
+                collect_resource_names(resolve, elem, seen, out);
+            }
+        }
+        TypeDefKind::List(elem) => collect_resource_names(resolve, elem, seen, out),
+        TypeDefKind::Option(inner) => collect_resource_names(resolve, inner, seen, out),
+        TypeDefKind::Result(result) => {
+            if let Some(ok) = result.ok.as_ref() {
+                collect_resource_names(resolve, ok, seen, out);
+            }
+            if let Some(err) = result.err.as_ref() {
+                collect_resource_names(resolve, err, seen, out);
+            }
+        }
+        TypeDefKind::Record(record) => {
+            for field in &record.fields {
+                collect_resource_names(resolve, &field.ty, seen, out);
+            }
+        }
+        TypeDefKind::Variant(variant) => {
+            for case in &variant.cases {
+                if let Some(ty) = case.ty.as_ref() {
+                    collect_resource_names(resolve, ty, seen, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Builds the fully-qualified, bare (version-independent) interface name
 /// (e.g. `"wasi:io/streams"`) `WasmComponentContext.getProvidedInterfaces()`
 /// uses.
@@ -181,10 +241,28 @@ fn build_interface(resolve: &Resolve, interface: &Interface) -> anyhow::Result<P
         });
     }
 
+    // Every resource type this interface's own functions construct, return, or accept a
+    // handle to -- not just the ones it defines itself. `wasmtime`'s component linker
+    // requires a destructor registered per (interface, resource type) pair for any resource
+    // an interface's canonical ABI touches, even a foreign one only ever seen as a `borrow<T>`
+    // parameter (e.g. every wasi:sockets/* interface takes `network` by borrow without owning
+    // it) or returned via a handle minted by another interface (e.g. wasi:io/streams' `output-
+    // stream.subscribe` returns a `pollable` it doesn't define) -- see
+    // WasmtimeComponentLinker#registerImports, which calls `defineComponentInterface` once per
+    // interface with exactly the resource names/destructors that interface declared.
     let mut resources = Vec::new();
+    let mut seen_resources = HashSet::new();
     for (type_name, type_id) in &interface.types {
-        if matches!(resolve.types[*type_id].kind, TypeDefKind::Resource) {
+        if matches!(resolve.types[*type_id].kind, TypeDefKind::Resource) && seen_resources.insert(type_name.clone()) {
             resources.push(type_name.clone());
+        }
+    }
+    for (_, function) in &interface.functions {
+        for param in &function.params {
+            collect_resource_names(resolve, &param.ty, &mut seen_resources, &mut resources);
+        }
+        if let Some(ty) = &function.result {
+            collect_resource_names(resolve, ty, &mut seen_resources, &mut resources);
         }
     }
 

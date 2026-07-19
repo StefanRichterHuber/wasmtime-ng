@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,21 +27,30 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.github.stefanrichterhuber.wasmtimejavang.ComponentContextLookup;
-import io.github.stefanrichterhuber.wasmtimejavang.ComponentFunction;
-import io.github.stefanrichterhuber.wasmtimejavang.ResourceDestructor;
 import io.github.stefanrichterhuber.wasmtimejavang.SemanticVersion;
-import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitEnum;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.InstanceNetworkContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.IpNameLookupContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.NetworkContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TcpContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TcpCreateSocketContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.UdpContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.UdpCreateSocketContext;
 
 /**
  * Implementation of {@code wasi:sockets/network}, {@code instance-network},
  * {@code tcp-create-socket}, {@code tcp}, {@code udp-create-socket},
  * {@code udp} and {@code ip-name-lookup} (WASI Preview 2, 0.2.6) -- the
  * {@code "wasi-sockets"} component context.
+ * <br>
+ * Implements all seven generated interfaces at once (see
+ * {@link WasiRandomContext} for why this works and how
+ * {@code getImportFunctions()}/{@code getImportResources()}/
+ * {@code getProvidedInterfaces()} get combined).
  * <br>
  * Unlike WASI Preview 1's socket support ({@code SocketWasiFileDescriptor}/
  * {@code ServerSocketWasiFileDescriptor}, which only ever wrap a socket the
@@ -58,11 +68,13 @@ import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
  * it -- there is no actual asynchrony to preserve.
  * <br>
  * IPv4 only: an {@code ipv6} {@code address-family} is rejected with
- * {@code not-supported} at socket creation. Several options WASI exposes
- * that {@code java.net} has no equivalent for (TCP {@code hop-limit} and
- * {@code keep-alive-idle-time}/{@code interval}/{@code count}, UDP
- * {@code unicast-hop-limit}) are stored and returned as configured but not
- * actually applied to the OS socket -- documented per-method below.
+ * {@code not-supported} at socket creation, and {@code [method]tcp-socket
+ * /udp-socket.address-family} always reports a fixed {@code ipv4}. Several
+ * options WASI exposes that {@code java.net} has no equivalent for (TCP
+ * {@code hop-limit} and {@code keep-alive-idle-time}/{@code interval}/
+ * {@code count}, UDP {@code unicast-hop-limit}) are stored and returned as
+ * configured but not actually applied to the OS socket -- documented per-
+ * method below.
  * <br>
  * Depends on {@code "wasi-io"} ({@link WasiIoResources}): TCP connection
  * streams are registered in -- and pollables are always allocated from --
@@ -71,27 +83,16 @@ import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
  * function (both implemented by {@link WasiIoContext}) only ever look a
  * pollable up in that one shared table.
  */
-public class WasiSocketsContext implements WasmComponentContext {
+public class WasiSocketsContext implements NetworkContext, InstanceNetworkContext, TcpCreateSocketContext,
+        TcpContext, UdpCreateSocketContext, UdpContext, IpNameLookupContext {
 
     /** The stable name other contexts reference via {@code getDependencies()}. */
     public static final String NAME = "wasi-sockets";
 
-    private static final String WASI_SOCKETS_NETWORK = "wasi:sockets/network";
-    private static final String WASI_SOCKETS_INSTANCE_NETWORK = "wasi:sockets/instance-network";
-    private static final String WASI_SOCKETS_TCP_CREATE_SOCKET = "wasi:sockets/tcp-create-socket";
-    private static final String WASI_SOCKETS_TCP = "wasi:sockets/tcp";
-    private static final String WASI_SOCKETS_UDP_CREATE_SOCKET = "wasi:sockets/udp-create-socket";
-    private static final String WASI_SOCKETS_UDP = "wasi:sockets/udp";
-    private static final String WASI_SOCKETS_IP_NAME_LOOKUP = "wasi:sockets/ip-name-lookup";
-
-    private static final Set<String> PROVIDED_INTERFACES = Set.of(
-            WASI_SOCKETS_NETWORK, WASI_SOCKETS_INSTANCE_NETWORK, WASI_SOCKETS_TCP_CREATE_SOCKET, WASI_SOCKETS_TCP,
-            WASI_SOCKETS_UDP_CREATE_SOCKET, WASI_SOCKETS_UDP, WASI_SOCKETS_IP_NAME_LOOKUP);
-
     /** How long {@code start-connect} blocks waiting for a TCP handshake. */
     private static final int CONNECT_TIMEOUT_MILLIS = 10_000;
 
-    private SemanticVersion version = WasiCliContext.DEFAULT_VERSION;
+    private SemanticVersion version = DEFAULT_VERSION;
     private WasiIoResources io;
 
     private final Map<Integer, Object> networks = new ConcurrentHashMap<>();
@@ -136,7 +137,15 @@ public class WasiSocketsContext implements WasmComponentContext {
 
     @Override
     public Set<String> getProvidedInterfaces() {
-        return PROVIDED_INTERFACES;
+        Set<String> result = new LinkedHashSet<>();
+        result.addAll(NetworkContext.super.getProvidedInterfaces());
+        result.addAll(InstanceNetworkContext.super.getProvidedInterfaces());
+        result.addAll(TcpCreateSocketContext.super.getProvidedInterfaces());
+        result.addAll(TcpContext.super.getProvidedInterfaces());
+        result.addAll(UdpCreateSocketContext.super.getProvidedInterfaces());
+        result.addAll(UdpContext.super.getProvidedInterfaces());
+        result.addAll(IpNameLookupContext.super.getProvidedInterfaces());
+        return result;
     }
 
     @Override
@@ -155,114 +164,36 @@ public class WasiSocketsContext implements WasmComponentContext {
     @Override
     public List<ComponentImportFunction> getImportFunctions() {
         List<ComponentImportFunction> result = new ArrayList<>();
-        String instanceNetwork = WASI_SOCKETS_INSTANCE_NETWORK + "@" + version;
-        String tcpCreate = WASI_SOCKETS_TCP_CREATE_SOCKET + "@" + version;
-        String tcp = WASI_SOCKETS_TCP + "@" + version;
-        String udpCreate = WASI_SOCKETS_UDP_CREATE_SOCKET + "@" + version;
-        String udp = WASI_SOCKETS_UDP + "@" + version;
-        String ipNameLookup = WASI_SOCKETS_IP_NAME_LOOKUP + "@" + version;
-
-        result.add(func(instanceNetwork, "instance-network", this::instanceNetwork));
-        result.add(func(tcpCreate, "create-tcp-socket", this::createTcpSocket));
-
-        result.add(func(tcp, "[method]tcp-socket.start-bind", this::tcpStartBind));
-        result.add(func(tcp, "[method]tcp-socket.finish-bind", this::tcpFinishBind));
-        result.add(func(tcp, "[method]tcp-socket.start-connect", this::tcpStartConnect));
-        result.add(func(tcp, "[method]tcp-socket.finish-connect", this::tcpFinishConnect));
-        result.add(func(tcp, "[method]tcp-socket.start-listen", this::tcpStartListen));
-        result.add(func(tcp, "[method]tcp-socket.finish-listen", this::tcpFinishListen));
-        result.add(func(tcp, "[method]tcp-socket.accept", this::tcpAccept));
-        result.add(func(tcp, "[method]tcp-socket.local-address", this::tcpLocalAddress));
-        result.add(func(tcp, "[method]tcp-socket.remote-address", this::tcpRemoteAddress));
-        result.add(func(tcp, "[method]tcp-socket.is-listening", this::tcpIsListening));
-        result.add(func(tcp, "[method]tcp-socket.set-listen-backlog-size", this::tcpSetListenBacklogSize));
-        result.add(func(tcp, "[method]tcp-socket.keep-alive-enabled", this::tcpKeepAliveEnabled));
-        result.add(func(tcp, "[method]tcp-socket.set-keep-alive-enabled", this::tcpSetKeepAliveEnabled));
-        result.add(func(tcp, "[method]tcp-socket.keep-alive-idle-time", this::tcpKeepAliveIdleTime));
-        result.add(func(tcp, "[method]tcp-socket.set-keep-alive-idle-time", this::tcpSetKeepAliveIdleTime));
-        result.add(func(tcp, "[method]tcp-socket.keep-alive-interval", this::tcpKeepAliveInterval));
-        result.add(func(tcp, "[method]tcp-socket.set-keep-alive-interval", this::tcpSetKeepAliveInterval));
-        result.add(func(tcp, "[method]tcp-socket.keep-alive-count", this::tcpKeepAliveCount));
-        result.add(func(tcp, "[method]tcp-socket.set-keep-alive-count", this::tcpSetKeepAliveCount));
-        result.add(func(tcp, "[method]tcp-socket.hop-limit", this::tcpHopLimit));
-        result.add(func(tcp, "[method]tcp-socket.set-hop-limit", this::tcpSetHopLimit));
-        result.add(func(tcp, "[method]tcp-socket.receive-buffer-size", this::tcpReceiveBufferSize));
-        result.add(func(tcp, "[method]tcp-socket.set-receive-buffer-size", this::tcpSetReceiveBufferSize));
-        result.add(func(tcp, "[method]tcp-socket.send-buffer-size", this::tcpSendBufferSize));
-        result.add(func(tcp, "[method]tcp-socket.set-send-buffer-size", this::tcpSetSendBufferSize));
-        result.add(func(tcp, "[method]tcp-socket.subscribe", this::tcpSubscribe));
-        result.add(func(tcp, "[method]tcp-socket.shutdown", this::tcpShutdown));
-
-        result.add(func(udpCreate, "create-udp-socket", this::createUdpSocket));
-
-        result.add(func(udp, "[method]udp-socket.start-bind", this::udpStartBind));
-        result.add(func(udp, "[method]udp-socket.finish-bind", this::udpFinishBind));
-        result.add(func(udp, "[method]udp-socket.stream", this::udpStream));
-        result.add(func(udp, "[method]udp-socket.local-address", this::udpLocalAddress));
-        result.add(func(udp, "[method]udp-socket.remote-address", this::udpRemoteAddress));
-        result.add(func(udp, "[method]udp-socket.unicast-hop-limit", this::udpUnicastHopLimit));
-        result.add(func(udp, "[method]udp-socket.set-unicast-hop-limit", this::udpSetUnicastHopLimit));
-        result.add(func(udp, "[method]udp-socket.receive-buffer-size", this::udpReceiveBufferSize));
-        result.add(func(udp, "[method]udp-socket.set-receive-buffer-size", this::udpSetReceiveBufferSize));
-        result.add(func(udp, "[method]udp-socket.send-buffer-size", this::udpSendBufferSize));
-        result.add(func(udp, "[method]udp-socket.set-send-buffer-size", this::udpSetSendBufferSize));
-        result.add(func(udp, "[method]udp-socket.subscribe", this::udpSubscribe));
-        result.add(func(udp, "[method]incoming-datagram-stream.receive", this::incomingDatagramReceive));
-        result.add(func(udp, "[method]incoming-datagram-stream.subscribe", this::incomingDatagramSubscribe));
-        result.add(func(udp, "[method]outgoing-datagram-stream.check-send", this::outgoingDatagramCheckSend));
-        result.add(func(udp, "[method]outgoing-datagram-stream.send", this::outgoingDatagramSend));
-        result.add(func(udp, "[method]outgoing-datagram-stream.subscribe", this::outgoingDatagramSubscribe));
-
-        result.add(func(ipNameLookup, "resolve-addresses", this::resolveAddresses));
-        result.add(func(ipNameLookup, "[method]resolve-address-stream.resolve-next-address",
-                this::resolveNextAddress));
-        result.add(func(ipNameLookup, "[method]resolve-address-stream.subscribe", this::resolveAddressSubscribe));
-
+        result.addAll(NetworkContext.super.getImportFunctions());
+        result.addAll(InstanceNetworkContext.super.getImportFunctions());
+        result.addAll(TcpCreateSocketContext.super.getImportFunctions());
+        result.addAll(TcpContext.super.getImportFunctions());
+        result.addAll(UdpCreateSocketContext.super.getImportFunctions());
+        result.addAll(UdpContext.super.getImportFunctions());
+        result.addAll(IpNameLookupContext.super.getImportFunctions());
         return result;
     }
 
     @Override
     public List<ComponentImportResource> getImportResources() {
         List<ComponentImportResource> result = new ArrayList<>();
-        String version = "@" + this.version;
-        for (String iface : List.of(WASI_SOCKETS_NETWORK, WASI_SOCKETS_INSTANCE_NETWORK, WASI_SOCKETS_TCP,
-                WASI_SOCKETS_UDP, WASI_SOCKETS_IP_NAME_LOOKUP)) {
-            result.add(resource(iface + version, "network", this::dropNetwork));
-        }
-        result.add(resource(WASI_SOCKETS_TCP_CREATE_SOCKET + version, "tcp-socket", this::dropTcpSocket));
-        result.add(resource(WASI_SOCKETS_TCP + version, "tcp-socket", this::dropTcpSocket));
-        result.add(resource(WASI_SOCKETS_TCP + version, "input-stream", io::dropInputStream));
-        result.add(resource(WASI_SOCKETS_TCP + version, "output-stream", io::dropOutputStream));
-        result.add(resource(WASI_SOCKETS_TCP + version, "pollable", io::dropPollable));
-
-        result.add(resource(WASI_SOCKETS_UDP_CREATE_SOCKET + version, "udp-socket", this::dropUdpSocket));
-        result.add(resource(WASI_SOCKETS_UDP + version, "udp-socket", this::dropUdpSocket));
-        result.add(resource(WASI_SOCKETS_UDP + version, "incoming-datagram-stream",
-                this::dropIncomingDatagramStream));
-        result.add(resource(WASI_SOCKETS_UDP + version, "outgoing-datagram-stream",
-                this::dropOutgoingDatagramStream));
-        result.add(resource(WASI_SOCKETS_UDP + version, "pollable", io::dropPollable));
-
-        result.add(resource(WASI_SOCKETS_IP_NAME_LOOKUP + version, "resolve-address-stream",
-                this::dropResolveAddressStream));
-        result.add(resource(WASI_SOCKETS_IP_NAME_LOOKUP + version, "pollable", io::dropPollable));
+        result.addAll(NetworkContext.super.getImportResources());
+        result.addAll(InstanceNetworkContext.super.getImportResources());
+        result.addAll(TcpCreateSocketContext.super.getImportResources());
+        result.addAll(TcpContext.super.getImportResources());
+        result.addAll(UdpCreateSocketContext.super.getImportResources());
+        result.addAll(UdpContext.super.getImportResources());
+        result.addAll(IpNameLookupContext.super.getImportResources());
         return result;
     }
 
-    private static ComponentImportFunction func(String interfaceName, String funcName, ComponentFunction function) {
-        return new ComponentImportFunction(interfaceName, funcName, function);
-    }
-
-    private static ComponentImportResource resource(String interfaceName, String resourceName,
-            ResourceDestructor destructor) {
-        return new ComponentImportResource(interfaceName, resourceName, destructor);
-    }
-
-    private void dropNetwork(int rep) {
+    @Override
+    public void dropNetwork(int rep) {
         networks.remove(rep);
     }
 
-    private void dropTcpSocket(int rep) {
+    @Override
+    public void dropTcpSocket(int rep) {
         TcpSocketEntry entry = tcpSockets.remove(rep);
         if (entry != null) {
             closeQuietly(entry.serverSocket);
@@ -270,23 +201,42 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    private void dropUdpSocket(int rep) {
+    @Override
+    public void dropUdpSocket(int rep) {
         UdpSocketEntry entry = udpSockets.remove(rep);
         if (entry != null) {
             closeQuietly(entry.socket);
         }
     }
 
-    private void dropIncomingDatagramStream(int rep) {
+    @Override
+    public void dropIncomingDatagramStream(int rep) {
         incomingDatagramStreams.remove(rep);
     }
 
-    private void dropOutgoingDatagramStream(int rep) {
+    @Override
+    public void dropOutgoingDatagramStream(int rep) {
         outgoingDatagramStreams.remove(rep);
     }
 
-    private void dropResolveAddressStream(int rep) {
+    @Override
+    public void dropResolveAddressStream(int rep) {
         resolveStreams.remove(rep);
+    }
+
+    @Override
+    public void dropPollable(int rep) {
+        io.dropPollable(rep);
+    }
+
+    @Override
+    public void dropInputStream(int rep) {
+        io.dropInputStream(rep);
+    }
+
+    @Override
+    public void dropOutputStream(int rep) {
+        io.dropOutputStream(rep);
     }
 
     private static void closeQuietly(AutoCloseable closeable) {
@@ -299,12 +249,12 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    private static Object[] okResult(Object value) {
-        return new Object[] { WitResult.ok(value) };
+    private static WitResult okResult(Object value) {
+        return WitResult.ok(value);
     }
 
-    private static Object[] errorResult(String errorCode) {
-        return new Object[] { WitResult.err(new WitEnum(errorCode)) };
+    private static WitResult errorResult(String errorCode) {
+        return WitResult.err(new WitEnum(errorCode));
     }
 
     /** Maps a {@code java.net} exception to the closest {@code error-code} case. */
@@ -407,14 +357,15 @@ public class WasiSocketsContext implements WasmComponentContext {
 
     // ---- instance-network / tcp-create-socket / udp-create-socket ---------
 
-    protected Object[] instanceNetwork(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public WitResource instanceNetworkInstanceNetwork(WasmtimeComponentInstance instance) {
         int rep = nextRep.getAndIncrement();
         networks.put(rep, Boolean.TRUE);
-        return new Object[] { WitResource.own("network", rep) };
+        return WitResource.own("network", rep);
     }
 
-    protected Object[] createTcpSocket(WasmtimeComponentInstance instance, Object[] args) {
-        WitEnum addressFamily = (WitEnum) args[0];
+    @Override
+    public WitResult tcpCreateSocketCreateTcpSocket(WasmtimeComponentInstance instance, WitEnum addressFamily) {
         if (!"ipv4".equals(addressFamily.name())) {
             return errorResult("not-supported");
         }
@@ -423,8 +374,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(WitResource.own("tcp-socket", rep));
     }
 
-    protected Object[] createUdpSocket(WasmtimeComponentInstance instance, Object[] args) {
-        WitEnum addressFamily = (WitEnum) args[0];
+    @Override
+    public WitResult udpCreateSocketCreateUdpSocket(WasmtimeComponentInstance instance, WitEnum addressFamily) {
         if (!"ipv4".equals(addressFamily.name())) {
             return errorResult("not-supported");
         }
@@ -435,9 +386,9 @@ public class WasiSocketsContext implements WasmComponentContext {
 
     // ---- wasi:sockets/tcp ---------------------------------------------------
 
-    protected Object[] tcpStartBind(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        WitVariant localAddress = (WitVariant) args[2];
+    @Override
+    public WitResult tcpSocketStartBind(WasmtimeComponentInstance instance, WitResource self, WitResource network,
+            WitVariant localAddress) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
@@ -450,8 +401,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] tcpFinishBind(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult tcpSocketFinishBind(WasmtimeComponentInstance instance, WitResource self) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null || !entry.bound) {
             return errorResult("not-in-progress");
@@ -459,9 +410,9 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] tcpStartConnect(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        WitVariant remoteAddress = (WitVariant) args[2];
+    @Override
+    public WitResult tcpSocketStartConnect(WasmtimeComponentInstance instance, WitResource self, WitResource network,
+            WitVariant remoteAddress) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
@@ -482,8 +433,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] tcpFinishConnect(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult tcpSocketFinishConnect(WasmtimeComponentInstance instance, WitResource self) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
@@ -499,8 +450,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(registerTcpStreams(entry.socket));
     }
 
-    protected Object[] tcpStartListen(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult tcpSocketStartListen(WasmtimeComponentInstance instance, WitResource self) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null || !entry.bound) {
             return errorResult("invalid-state");
@@ -516,8 +467,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] tcpFinishListen(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult tcpSocketFinishListen(WasmtimeComponentInstance instance, WitResource self) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
@@ -535,8 +486,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] tcpAccept(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult tcpSocketAccept(WasmtimeComponentInstance instance, WitResource self) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null || !entry.listening || entry.serverSocket == null) {
             return errorResult("invalid-state");
@@ -581,8 +532,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] tcpLocalAddress(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult tcpSocketLocalAddress(WasmtimeComponentInstance instance, WitResource self) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
@@ -597,8 +548,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(toWitIpSocketAddress(address));
     }
 
-    protected Object[] tcpRemoteAddress(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult tcpSocketRemoteAddress(WasmtimeComponentInstance instance, WitResource self) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null || entry.socket == null) {
             return errorResult("invalid-state");
@@ -606,15 +557,23 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(toWitIpSocketAddress((InetSocketAddress) entry.socket.getRemoteSocketAddress()));
     }
 
-    protected Object[] tcpIsListening(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public boolean tcpSocketIsListening(WasmtimeComponentInstance instance, WitResource self) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
-        return new Object[] { entry != null && entry.listening };
+        return entry != null && entry.listening;
     }
 
-    protected Object[] tcpSetListenBacklogSize(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        long value = (Long) args[1];
+    /**
+     * IPv4 only (see class javadoc), so this always reports a fixed {@code
+     * ipv4}.
+     */
+    @Override
+    public WitEnum tcpSocketAddressFamily(WasmtimeComponentInstance instance, WitResource self) {
+        return new WitEnum("ipv4");
+    }
+
+    @Override
+    public WitResult tcpSocketSetListenBacklogSize(WasmtimeComponentInstance instance, WitResource self, long value) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
@@ -623,8 +582,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] tcpKeepAliveEnabled(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult tcpSocketKeepAliveEnabled(WasmtimeComponentInstance instance, WitResource self) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
@@ -638,9 +597,9 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] tcpSetKeepAliveEnabled(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        boolean value = (Boolean) args[1];
+    @Override
+    public WitResult tcpSocketSetKeepAliveEnabled(WasmtimeComponentInstance instance, WitResource self,
+            boolean value) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
@@ -656,76 +615,87 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] tcpKeepAliveIdleTime(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketKeepAliveIdleTime(WasmtimeComponentInstance instance, WitResource self) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
         return okResult(entry.keepAliveIdleTimeNanos);
     }
 
-    protected Object[] tcpSetKeepAliveIdleTime(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketSetKeepAliveIdleTime(WasmtimeComponentInstance instance, WitResource self,
+            long value) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
-        entry.keepAliveIdleTimeNanos = (Long) args[1];
+        entry.keepAliveIdleTimeNanos = value;
         return okResult(null);
     }
 
-    protected Object[] tcpKeepAliveInterval(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketKeepAliveInterval(WasmtimeComponentInstance instance, WitResource self) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
         return okResult(entry.keepAliveIntervalNanos);
     }
 
-    protected Object[] tcpSetKeepAliveInterval(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketSetKeepAliveInterval(WasmtimeComponentInstance instance, WitResource self,
+            long value) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
-        entry.keepAliveIntervalNanos = (Long) args[1];
+        entry.keepAliveIntervalNanos = value;
         return okResult(null);
     }
 
-    protected Object[] tcpKeepAliveCount(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketKeepAliveCount(WasmtimeComponentInstance instance, WitResource self) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
         return okResult((int) entry.keepAliveCount);
     }
 
-    protected Object[] tcpSetKeepAliveCount(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketSetKeepAliveCount(WasmtimeComponentInstance instance, WitResource self, int value) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
-        entry.keepAliveCount = (Integer) args[1];
+        entry.keepAliveCount = value;
         return okResult(null);
     }
 
-    protected Object[] tcpHopLimit(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketHopLimit(WasmtimeComponentInstance instance, WitResource self) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
         return okResult((int) entry.hopLimit);
     }
 
-    protected Object[] tcpSetHopLimit(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketSetHopLimit(WasmtimeComponentInstance instance, WitResource self, int value) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
-        entry.hopLimit = (short) (int) (Integer) args[1];
+        entry.hopLimit = (short) value;
         return okResult(null);
     }
 
-    protected Object[] tcpReceiveBufferSize(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketReceiveBufferSize(WasmtimeComponentInstance instance, WitResource self) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
@@ -738,12 +708,13 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] tcpSetReceiveBufferSize(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketSetReceiveBufferSize(WasmtimeComponentInstance instance, WitResource self,
+            long value) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
-        long value = (Long) args[1];
         entry.pendingReceiveBufferSize = value;
         if (entry.socket != null) {
             try {
@@ -755,8 +726,9 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] tcpSendBufferSize(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketSendBufferSize(WasmtimeComponentInstance instance, WitResource self) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
@@ -769,12 +741,12 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] tcpSetSendBufferSize(WasmtimeComponentInstance instance, Object[] args) {
-        TcpSocketEntry entry = tcpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult tcpSocketSetSendBufferSize(WasmtimeComponentInstance instance, WitResource self, long value) {
+        TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
-        long value = (Long) args[1];
         entry.pendingSendBufferSize = value;
         if (entry.socket != null) {
             try {
@@ -786,14 +758,14 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] tcpSubscribe(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public WitResource tcpSocketSubscribe(WasmtimeComponentInstance instance, WitResource self) {
         int rep = io.registerPollableDeadline(WasiIoResources.ALWAYS_READY);
-        return new Object[] { WitResource.own("pollable", rep) };
+        return WitResource.own("pollable", rep);
     }
 
-    protected Object[] tcpShutdown(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        WitEnum shutdownType = (WitEnum) args[1];
+    @Override
+    public WitResult tcpSocketShutdown(WasmtimeComponentInstance instance, WitResource self, WitEnum shutdownType) {
         TcpSocketEntry entry = tcpSockets.get(self.rep());
         if (entry == null || entry.socket == null) {
             return errorResult("invalid-state");
@@ -814,9 +786,9 @@ public class WasiSocketsContext implements WasmComponentContext {
 
     // ---- wasi:sockets/udp ----------------------------------------------------
 
-    protected Object[] udpStartBind(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        WitVariant localAddress = (WitVariant) args[2];
+    @Override
+    public WitResult udpSocketStartBind(WasmtimeComponentInstance instance, WitResource self, WitResource network,
+            WitVariant localAddress) {
         UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null || entry.bound) {
             return errorResult("invalid-state");
@@ -825,8 +797,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] udpFinishBind(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult udpSocketFinishBind(WasmtimeComponentInstance instance, WitResource self) {
         UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null || entry.pendingLocalAddress == null) {
             return errorResult("not-in-progress");
@@ -847,16 +819,15 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] udpStream(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        @SuppressWarnings("unchecked")
-        Optional<WitVariant> remoteAddress = (Optional<WitVariant>) args[1];
+    @Override
+    public WitResult udpSocketStream(WasmtimeComponentInstance instance, WitResource self,
+            Optional<Object> remoteAddress) {
         UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null || !entry.bound) {
             return errorResult("invalid-state");
         }
         if (remoteAddress.isPresent()) {
-            InetSocketAddress remote = toInetSocketAddress(remoteAddress.get());
+            InetSocketAddress remote = toInetSocketAddress((WitVariant) remoteAddress.get());
             try {
                 entry.socket.connect(remote);
             } catch (SocketException e) {
@@ -877,41 +848,55 @@ public class WasiSocketsContext implements WasmComponentContext {
                 WitResource.own("outgoing-datagram-stream", outRep) });
     }
 
-    protected Object[] udpLocalAddress(WasmtimeComponentInstance instance, Object[] args) {
-        UdpSocketEntry entry = udpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult udpSocketLocalAddress(WasmtimeComponentInstance instance, WitResource self) {
+        UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null || entry.socket == null) {
             return errorResult("invalid-state");
         }
         return okResult(toWitIpSocketAddress((InetSocketAddress) entry.socket.getLocalSocketAddress()));
     }
 
-    protected Object[] udpRemoteAddress(WasmtimeComponentInstance instance, Object[] args) {
-        UdpSocketEntry entry = udpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult udpSocketRemoteAddress(WasmtimeComponentInstance instance, WitResource self) {
+        UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null || entry.connectedRemote == null) {
             return errorResult("invalid-state");
         }
         return okResult(toWitIpSocketAddress(entry.connectedRemote));
     }
 
-    protected Object[] udpUnicastHopLimit(WasmtimeComponentInstance instance, Object[] args) {
-        UdpSocketEntry entry = udpSockets.get(((WitResource) args[0]).rep());
+    /**
+     * IPv4 only (see class javadoc), so this always reports a fixed {@code
+     * ipv4}.
+     */
+    @Override
+    public WitEnum udpSocketAddressFamily(WasmtimeComponentInstance instance, WitResource self) {
+        return new WitEnum("ipv4");
+    }
+
+    @Override
+    public WitResult udpSocketUnicastHopLimit(WasmtimeComponentInstance instance, WitResource self) {
+        UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
         return okResult((int) entry.hopLimit);
     }
 
-    protected Object[] udpSetUnicastHopLimit(WasmtimeComponentInstance instance, Object[] args) {
-        UdpSocketEntry entry = udpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult udpSocketSetUnicastHopLimit(WasmtimeComponentInstance instance, WitResource self, int value) {
+        UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
-        entry.hopLimit = (short) (int) (Integer) args[1];
+        entry.hopLimit = (short) value;
         return okResult(null);
     }
 
-    protected Object[] udpReceiveBufferSize(WasmtimeComponentInstance instance, Object[] args) {
-        UdpSocketEntry entry = udpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult udpSocketReceiveBufferSize(WasmtimeComponentInstance instance, WitResource self) {
+        UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
@@ -924,12 +909,13 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] udpSetReceiveBufferSize(WasmtimeComponentInstance instance, Object[] args) {
-        UdpSocketEntry entry = udpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult udpSocketSetReceiveBufferSize(WasmtimeComponentInstance instance, WitResource self,
+            long value) {
+        UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
-        long value = (Long) args[1];
         entry.pendingReceiveBufferSize = value;
         if (entry.socket != null) {
             try {
@@ -941,8 +927,9 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] udpSendBufferSize(WasmtimeComponentInstance instance, Object[] args) {
-        UdpSocketEntry entry = udpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult udpSocketSendBufferSize(WasmtimeComponentInstance instance, WitResource self) {
+        UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
@@ -955,12 +942,12 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] udpSetSendBufferSize(WasmtimeComponentInstance instance, Object[] args) {
-        UdpSocketEntry entry = udpSockets.get(((WitResource) args[0]).rep());
+    @Override
+    public WitResult udpSocketSetSendBufferSize(WasmtimeComponentInstance instance, WitResource self, long value) {
+        UdpSocketEntry entry = udpSockets.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
         }
-        long value = (Long) args[1];
         entry.pendingSendBufferSize = value;
         if (entry.socket != null) {
             try {
@@ -972,14 +959,15 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(null);
     }
 
-    protected Object[] udpSubscribe(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public WitResource udpSocketSubscribe(WasmtimeComponentInstance instance, WitResource self) {
         int rep = io.registerPollableDeadline(WasiIoResources.ALWAYS_READY);
-        return new Object[] { WitResource.own("pollable", rep) };
+        return WitResource.own("pollable", rep);
     }
 
-    protected Object[] incomingDatagramReceive(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        long maxResults = (Long) args[1];
+    @Override
+    public WitResult incomingDatagramStreamReceive(WasmtimeComponentInstance instance, WitResource self,
+            long maxResults) {
         UdpSocketEntry entry = incomingDatagramStreams.get(self.rep());
         if (entry == null || entry.socket == null) {
             return errorResult("invalid-state");
@@ -1005,13 +993,14 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] incomingDatagramSubscribe(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public WitResource incomingDatagramStreamSubscribe(WasmtimeComponentInstance instance, WitResource self) {
         int rep = io.registerPollableDeadline(WasiIoResources.ALWAYS_READY);
-        return new Object[] { WitResource.own("pollable", rep) };
+        return WitResource.own("pollable", rep);
     }
 
-    protected Object[] outgoingDatagramCheckSend(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult outgoingDatagramStreamCheckSend(WasmtimeComponentInstance instance, WitResource self) {
         UdpSocketEntry entry = outgoingDatagramStreams.get(self.rep());
         if (entry == null) {
             return errorResult("invalid-state");
@@ -1020,9 +1009,9 @@ public class WasiSocketsContext implements WasmComponentContext {
     }
 
     @SuppressWarnings("unchecked")
-    protected Object[] outgoingDatagramSend(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
-        List<Object> datagrams = (List<Object>) args[1];
+    @Override
+    public WitResult outgoingDatagramStreamSend(WasmtimeComponentInstance instance, WitResource self,
+            List<Object> datagrams) {
         UdpSocketEntry entry = outgoingDatagramStreams.get(self.rep());
         if (entry == null || entry.socket == null) {
             return errorResult("invalid-state");
@@ -1050,15 +1039,17 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(sent);
     }
 
-    protected Object[] outgoingDatagramSubscribe(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public WitResource outgoingDatagramStreamSubscribe(WasmtimeComponentInstance instance, WitResource self) {
         int rep = io.registerPollableDeadline(WasiIoResources.ALWAYS_READY);
-        return new Object[] { WitResource.own("pollable", rep) };
+        return WitResource.own("pollable", rep);
     }
 
     // ---- wasi:sockets/ip-name-lookup -----------------------------------------
 
-    protected Object[] resolveAddresses(WasmtimeComponentInstance instance, Object[] args) {
-        String name = (String) args[1];
+    @Override
+    public WitResult ipNameLookupResolveAddresses(WasmtimeComponentInstance instance, WitResource network,
+            String name) {
         try {
             List<InetAddress> resolved = Arrays.stream(InetAddress.getAllByName(name))
                     .filter(address -> !(address instanceof Inet6Address)).toList();
@@ -1070,8 +1061,8 @@ public class WasiSocketsContext implements WasmComponentContext {
         }
     }
 
-    protected Object[] resolveNextAddress(WasmtimeComponentInstance instance, Object[] args) {
-        WitResource self = (WitResource) args[0];
+    @Override
+    public WitResult resolveAddressStreamResolveNextAddress(WasmtimeComponentInstance instance, WitResource self) {
         Iterator<InetAddress> iterator = resolveStreams.get(self.rep());
         if (iterator == null) {
             return errorResult("invalid-state");
@@ -1082,9 +1073,10 @@ public class WasiSocketsContext implements WasmComponentContext {
         return okResult(Optional.of(toWitIpAddress(iterator.next())));
     }
 
-    protected Object[] resolveAddressSubscribe(WasmtimeComponentInstance instance, Object[] args) {
+    @Override
+    public WitResource resolveAddressStreamSubscribe(WasmtimeComponentInstance instance, WitResource self) {
         int rep = io.registerPollableDeadline(WasiIoResources.ALWAYS_READY);
-        return new Object[] { WitResource.own("pollable", rep) };
+        return WitResource.own("pollable", rep);
     }
 
     @Override

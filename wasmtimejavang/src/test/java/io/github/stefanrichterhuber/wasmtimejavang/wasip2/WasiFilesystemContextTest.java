@@ -70,11 +70,9 @@ public class WasiFilesystemContextTest {
     }
 
     /** Preopens {@code dir} under {@code clientName} and returns its descriptor. */
-    @SuppressWarnings("unchecked")
     private static WitResource preopen(WasiFilesystemContext filesystem, Path dir, String clientName) {
         filesystem.withDirectory(dir, clientName);
-        Object[] result = filesystem.getDirectories(null, new Object[0]);
-        List<Object> tuples = (List<Object>) result[0];
+        List<Object> tuples = filesystem.preopensGetDirectories(null);
         for (Object t : tuples) {
             Object[] tuple = (Object[]) t;
             if (clientName.equals(tuple[1])) {
@@ -86,9 +84,7 @@ public class WasiFilesystemContextTest {
 
     private static WitResult openAt(WasiFilesystemContext filesystem, WitResource dir, String path,
             Set<String> openFlags, Set<String> descriptorFlags) {
-        Object[] result = filesystem.openAt(null,
-                new Object[] { dir, Set.of("symlink-follow"), path, openFlags, descriptorFlags });
-        return (WitResult) result[0];
+        return filesystem.descriptorOpenAt(null, dir, Set.of("symlink-follow"), path, openFlags, descriptorFlags);
     }
 
     private static WitResource openFile(WasiFilesystemContext filesystem, WitResource dir, String path,
@@ -136,15 +132,19 @@ public class WasiFilesystemContextTest {
 
         List<String> expectedTypeFuncs = List.of(
                 "[method]descriptor.read-via-stream", "[method]descriptor.write-via-stream",
-                "[method]descriptor.append-via-stream", "[method]descriptor.get-flags",
-                "[method]descriptor.set-size", "[method]descriptor.set-times",
+                "[method]descriptor.append-via-stream", "[method]descriptor.advise",
+                "[method]descriptor.sync-data", "[method]descriptor.get-flags",
+                "[method]descriptor.get-type", "[method]descriptor.set-size", "[method]descriptor.set-times",
+                "[method]descriptor.read", "[method]descriptor.write",
                 "[method]descriptor.read-directory", "[method]descriptor.sync",
                 "[method]descriptor.create-directory-at", "[method]descriptor.stat",
-                "[method]descriptor.stat-at", "[method]descriptor.link-at",
-                "[method]descriptor.open-at", "[method]descriptor.remove-directory-at",
-                "[method]descriptor.rename-at", "[method]descriptor.unlink-file-at",
+                "[method]descriptor.stat-at", "[method]descriptor.set-times-at", "[method]descriptor.link-at",
+                "[method]descriptor.open-at", "[method]descriptor.readlink-at",
+                "[method]descriptor.remove-directory-at",
+                "[method]descriptor.rename-at", "[method]descriptor.symlink-at",
+                "[method]descriptor.unlink-file-at", "[method]descriptor.is-same-object",
                 "[method]descriptor.metadata-hash", "[method]descriptor.metadata-hash-at",
-                "[method]directory-entry-stream.read-directory-entry");
+                "[method]directory-entry-stream.read-directory-entry", "filesystem-error-code");
         for (String funcName : expectedTypeFuncs) {
             assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(types) && f.funcName().equals(funcName)),
                     "missing " + funcName);
@@ -210,8 +210,7 @@ public class WasiFilesystemContextTest {
 
         WitResource file = openFile(filesystem, dir, "input.txt", false, false);
 
-        Object[] streamResult = filesystem.readViaStream(null, new Object[] { file, 0L });
-        WitResult wr = (WitResult) streamResult[0];
+        WitResult wr = filesystem.descriptorReadViaStream(null, file, 0L);
         assertTrue(wr.ok());
         WitResource inputStream = (WitResource) wr.value();
         assertEquals("input-stream", inputStream.resourceName());
@@ -226,8 +225,7 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
 
         WitResource file = openFile(filesystem, dir, "new.txt", true, true);
-        Object[] streamResult = filesystem.writeViaStream(null, new Object[] { file, 0L });
-        WitResult wr = (WitResult) streamResult[0];
+        WitResult wr = filesystem.descriptorWriteViaStream(null, file, 0L);
         assertTrue(wr.ok());
         WitResource outputStream = (WitResource) wr.value();
         io.getOutputStream(outputStream.rep()).write("written via stream".getBytes("UTF-8"));
@@ -244,8 +242,7 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "append.txt", false, true);
 
-        Object[] streamResult = filesystem.appendViaStream(null, new Object[] { file });
-        WitResult wr = (WitResult) streamResult[0];
+        WitResult wr = filesystem.descriptorAppendViaStream(null, file);
         assertTrue(wr.ok());
         WitResource outputStream = (WitResource) wr.value();
         io.getOutputStream(outputStream.rep()).write("second".getBytes("UTF-8"));
@@ -257,8 +254,7 @@ public class WasiFilesystemContextTest {
     public void readViaStreamOnDirectoryFails() {
         WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
         WitResource dir = preopen(filesystem, fs.getPath("/"), ".");
-        Object[] result = filesystem.readViaStream(null, new Object[] { dir, 0L });
-        WitResult wr = (WitResult) result[0];
+        WitResult wr = filesystem.descriptorReadViaStream(null, dir, 0L);
         assertFalse(wr.ok());
         assertEquals(new WitEnum("is-directory"), wr.value());
     }
@@ -273,8 +269,7 @@ public class WasiFilesystemContextTest {
         assertTrue(opened.ok());
         WitResource file = (WitResource) opened.value();
 
-        Object[] result = filesystem.readViaStream(null, new Object[] { file, 0L });
-        WitResult wr = (WitResult) result[0];
+        WitResult wr = filesystem.descriptorReadViaStream(null, file, 0L);
         assertFalse(wr.ok());
         assertEquals(new WitEnum("not-permitted"), wr.value());
     }
@@ -287,8 +282,7 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "f.txt", false, false);
 
-        Object[] result = filesystem.writeViaStream(null, new Object[] { file, 0L });
-        WitResult wr = (WitResult) result[0];
+        WitResult wr = filesystem.descriptorWriteViaStream(null, file, 0L);
         assertFalse(wr.ok());
         assertEquals(new WitEnum("not-permitted"), wr.value());
     }
@@ -300,8 +294,7 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "rw.txt", true, true);
 
-        Object[] result = filesystem.getFlags(null, new Object[] { file });
-        WitResult wr = (WitResult) result[0];
+        WitResult wr = filesystem.descriptorGetFlags(null, file);
         assertTrue(wr.ok());
         @SuppressWarnings("unchecked")
         Set<String> flags = (Set<String>) wr.value();
@@ -311,9 +304,129 @@ public class WasiFilesystemContextTest {
     @Test
     public void getFlagsOnUnknownDescriptorFails() {
         WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
-        Object[] result = filesystem.getFlags(null, new Object[] { resourceOf(999) });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("bad-descriptor"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorGetFlags(null, resourceOf(999));
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("bad-descriptor"), wr.value());
+    }
+
+    @Test
+    public void getTypeReturnsRegularFileForFile() throws Exception {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        Path root = fs.getPath("/");
+        Files.writeString(root.resolve("f.txt"), "x");
+        WitResource dir = preopen(filesystem, root, ".");
+        WitResource file = openFile(filesystem, dir, "f.txt", false, false);
+
+        WitResult wr = filesystem.descriptorGetType(null, file);
+        assertTrue(wr.ok());
+        assertEquals(new WitEnum("regular-file"), wr.value());
+    }
+
+    @Test
+    public void getTypeReturnsDirectoryForDirectory() {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        WitResource dir = preopen(filesystem, fs.getPath("/"), ".");
+        WitResult wr = filesystem.descriptorGetType(null, dir);
+        assertTrue(wr.ok());
+        assertEquals(new WitEnum("directory"), wr.value());
+    }
+
+    @Test
+    public void getTypeOnUnknownDescriptorFails() {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        WitResult wr = filesystem.descriptorGetType(null, resourceOf(999));
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("bad-descriptor"), wr.value());
+    }
+
+    @Test
+    public void adviseValidatesDescriptorAndOtherwiseNoOps() {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        Path root = fs.getPath("/");
+        WitResource dir = preopen(filesystem, root, ".");
+        WitResource file = openFile(filesystem, dir, "adv.txt", true, true);
+
+        WitResult ok = filesystem.descriptorAdvise(null, file, 0L, 10L, new WitEnum("normal"));
+        assertTrue(ok.ok());
+
+        WitResult missing = filesystem.descriptorAdvise(null, resourceOf(999), 0L, 10L, new WitEnum("normal"));
+        assertFalse(missing.ok());
+        assertEquals(new WitEnum("bad-descriptor"), missing.value());
+    }
+
+    @Test
+    public void syncDataSucceedsOnOpenFile() {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        Path root = fs.getPath("/");
+        WitResource dir = preopen(filesystem, root, ".");
+        WitResource file = openFile(filesystem, dir, "sd.txt", true, true);
+
+        assertTrue(filesystem.descriptorSyncData(null, file).ok());
+        assertTrue(filesystem.descriptorSyncData(null, dir).ok());
+    }
+
+    @Test
+    public void syncDataOnUnknownDescriptorFails() {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        WitResult wr = filesystem.descriptorSyncData(null, resourceOf(999));
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("bad-descriptor"), wr.value());
+    }
+
+    @Test
+    public void readReadsAtOffsetAndReportsEof() throws Exception {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        Path root = fs.getPath("/");
+        Files.writeString(root.resolve("r.txt"), "0123456789");
+        WitResource dir = preopen(filesystem, root, ".");
+        WitResource file = openFile(filesystem, dir, "r.txt", false, false);
+
+        WitResult wr = filesystem.descriptorRead(null, file, 100L, 5L);
+        assertTrue(wr.ok());
+        Object[] tuple = (Object[]) wr.value();
+        assertEquals("56789", new String((byte[]) tuple[0], "UTF-8"));
+        assertEquals(true, tuple[1]);
+    }
+
+    @Test
+    public void readWithoutReadPermissionFails() throws Exception {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        Path root = fs.getPath("/");
+        Files.writeString(root.resolve("r.txt"), "x");
+        WitResource dir = preopen(filesystem, root, ".");
+        WitResult opened = openAt(filesystem, dir, "r.txt", Set.of(), Set.of("write"));
+        WitResource file = (WitResource) opened.value();
+
+        WitResult wr = filesystem.descriptorRead(null, file, 10L, 0L);
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("not-permitted"), wr.value());
+    }
+
+    @Test
+    public void writeWritesAtOffset() throws Exception {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        Path root = fs.getPath("/");
+        Files.writeString(root.resolve("w.txt"), "0000000000");
+        WitResource dir = preopen(filesystem, root, ".");
+        WitResource file = openFile(filesystem, dir, "w.txt", false, true);
+
+        WitResult wr = filesystem.descriptorWrite(null, file, "AAA".getBytes("UTF-8"), 3L);
+        assertTrue(wr.ok());
+        assertEquals(3L, wr.value());
+        assertEquals("000AAA0000", Files.readString(root.resolve("w.txt")));
+    }
+
+    @Test
+    public void writeWithoutWritePermissionFails() throws Exception {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        Path root = fs.getPath("/");
+        Files.writeString(root.resolve("w.txt"), "x");
+        WitResource dir = preopen(filesystem, root, ".");
+        WitResource file = openFile(filesystem, dir, "w.txt", false, false);
+
+        WitResult wr = filesystem.descriptorWrite(null, file, "A".getBytes("UTF-8"), 0L);
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("not-permitted"), wr.value());
     }
 
     @Test
@@ -324,8 +437,8 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "t.txt", false, true);
 
-        Object[] result = filesystem.setSize(null, new Object[] { file, 4L });
-        assertTrue(((WitResult) result[0]).ok());
+        WitResult wr = filesystem.descriptorSetSize(null, file, 4L);
+        assertTrue(wr.ok());
         assertEquals(4, Files.size(root.resolve("t.txt")));
     }
 
@@ -333,9 +446,9 @@ public class WasiFilesystemContextTest {
     public void setSizeOnDirectoryFails() {
         WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
         WitResource dir = preopen(filesystem, fs.getPath("/"), ".");
-        Object[] result = filesystem.setSize(null, new Object[] { dir, 0L });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("is-directory"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorSetSize(null, dir, 0L);
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("is-directory"), wr.value());
     }
 
     @Test
@@ -348,9 +461,9 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "times.txt", false, true);
 
-        Object[] result = filesystem.setTimes(null,
-                new Object[] { file, new WitVariant("no-change", null), new WitVariant("now", null) });
-        assertTrue(((WitResult) result[0]).ok());
+        WitResult wr = filesystem.descriptorSetTimes(null, file, new WitVariant("no-change", null),
+                new WitVariant("now", null));
+        assertTrue(wr.ok());
         assertTrue(Files.getLastModifiedTime(target).toMillis() > 0);
     }
 
@@ -364,9 +477,9 @@ public class WasiFilesystemContextTest {
         WitResource file = openFile(filesystem, dir, "times2.txt", false, true);
 
         Map<String, Object> datetime = Map.of("seconds", 1_000_000L, "nanoseconds", 0);
-        Object[] result = filesystem.setTimes(null,
-                new Object[] { file, new WitVariant("timestamp", datetime), new WitVariant("no-change", null) });
-        assertTrue(((WitResult) result[0]).ok());
+        WitResult wr = filesystem.descriptorSetTimes(null, file, new WitVariant("timestamp", datetime),
+                new WitVariant("no-change", null));
+        assertTrue(wr.ok());
         assertEquals(1_000_000L, Files.getAttribute(target, "lastAccessTime") instanceof FileTime ft
                 ? ft.to(TimeUnit.SECONDS)
                 : -1);
@@ -375,10 +488,36 @@ public class WasiFilesystemContextTest {
     @Test
     public void setTimesOnUnknownDescriptorFails() {
         WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
-        Object[] result = filesystem.setTimes(null,
-                new Object[] { resourceOf(999), new WitVariant("no-change", null), new WitVariant("no-change", null) });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("bad-descriptor"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorSetTimes(null, resourceOf(999), new WitVariant("no-change", null),
+                new WitVariant("no-change", null));
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("bad-descriptor"), wr.value());
+    }
+
+    @Test
+    public void setTimesAtResolvesRelativePath() throws Exception {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        Path root = fs.getPath("/");
+        Path target = root.resolve("timesat.txt");
+        Files.writeString(target, "x");
+        Files.setAttribute(target, "lastModifiedTime", FileTime.fromMillis(0));
+        WitResource dir = preopen(filesystem, root, ".");
+
+        WitResult wr = filesystem.descriptorSetTimesAt(null, dir, Set.of("symlink-follow"), "timesat.txt",
+                new WitVariant("no-change", null), new WitVariant("now", null));
+        assertTrue(wr.ok());
+        assertTrue(Files.getLastModifiedTime(target).toMillis() > 0);
+    }
+
+    @Test
+    public void setTimesAtSandboxEscapeFails() {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        WitResource dir = preopen(filesystem, fs.getPath("/sandbox"), ".");
+
+        WitResult wr = filesystem.descriptorSetTimesAt(null, dir, Set.of(), "../../etc/passwd",
+                new WitVariant("now", null), new WitVariant("no-change", null));
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("access"), wr.value());
     }
 
     @Test
@@ -389,8 +528,7 @@ public class WasiFilesystemContextTest {
         Files.writeString(root.resolve("b.txt"), "b");
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] rdResult = filesystem.readDirectory(null, new Object[] { dir });
-        WitResult rdWr = (WitResult) rdResult[0];
+        WitResult rdWr = filesystem.descriptorReadDirectory(null, dir);
         assertTrue(rdWr.ok());
         WitResource dirStream = (WitResource) rdWr.value();
         assertEquals("directory-entry-stream", dirStream.resourceName());
@@ -399,8 +537,7 @@ public class WasiFilesystemContextTest {
         // directory), so only assert on what this test itself created.
         Map<String, Object> byName = new java.util.HashMap<>();
         while (true) {
-            Object[] entryResult = filesystem.readDirectoryEntry(null, new Object[] { dirStream });
-            WitResult entryWr = (WitResult) entryResult[0];
+            WitResult entryWr = filesystem.directoryEntryStreamReadDirectoryEntry(null, dirStream);
             assertTrue(entryWr.ok());
             @SuppressWarnings("unchecked")
             Optional<Map<String, Object>> entry = (Optional<Map<String, Object>>) entryWr.value();
@@ -422,17 +559,17 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "f.txt", false, false);
 
-        Object[] result = filesystem.readDirectory(null, new Object[] { file });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("not-directory"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorReadDirectory(null, file);
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("not-directory"), wr.value());
     }
 
     @Test
     public void readDirectoryEntryOnUnknownStreamFails() {
         WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
-        Object[] result = filesystem.readDirectoryEntry(null, new Object[] { resourceOf(999) });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("bad-descriptor"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.directoryEntryStreamReadDirectoryEntry(null, resourceOf(999));
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("bad-descriptor"), wr.value());
     }
 
     @Test
@@ -442,16 +579,16 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "s.txt", true, true);
 
-        assertTrue(((WitResult) filesystem.sync(null, new Object[] { dir })[0]).ok());
-        assertTrue(((WitResult) filesystem.sync(null, new Object[] { file })[0]).ok());
+        assertTrue(filesystem.descriptorSync(null, dir).ok());
+        assertTrue(filesystem.descriptorSync(null, file).ok());
     }
 
     @Test
     public void syncOnUnknownDescriptorFails() {
         WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
-        Object[] result = filesystem.sync(null, new Object[] { resourceOf(999) });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("bad-descriptor"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorSync(null, resourceOf(999));
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("bad-descriptor"), wr.value());
     }
 
     @Test
@@ -460,8 +597,8 @@ public class WasiFilesystemContextTest {
         Path root = fs.getPath("/");
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.createDirectoryAt(null, new Object[] { dir, "subdir" });
-        assertTrue(((WitResult) result[0]).ok());
+        WitResult wr = filesystem.descriptorCreateDirectoryAt(null, dir, "subdir");
+        assertTrue(wr.ok());
         assertTrue(Files.isDirectory(root.resolve("subdir")));
     }
 
@@ -472,9 +609,9 @@ public class WasiFilesystemContextTest {
         Files.createDirectory(root.resolve("subdir"));
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.createDirectoryAt(null, new Object[] { dir, "subdir" });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("exist"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorCreateDirectoryAt(null, dir, "subdir");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("exist"), wr.value());
     }
 
     @Test
@@ -484,9 +621,9 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "f.txt", true, true);
 
-        Object[] result = filesystem.createDirectoryAt(null, new Object[] { file, "subdir" });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("not-directory"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorCreateDirectoryAt(null, file, "subdir");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("not-directory"), wr.value());
     }
 
     @Test
@@ -497,8 +634,7 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "f.txt", false, false);
 
-        Object[] result = filesystem.stat(null, new Object[] { file });
-        WitResult wr = (WitResult) result[0];
+        WitResult wr = filesystem.descriptorStat(null, file);
         assertTrue(wr.ok());
         @SuppressWarnings("unchecked")
         Map<String, Object> stat = (Map<String, Object>) wr.value();
@@ -517,8 +653,7 @@ public class WasiFilesystemContextTest {
         Files.writeString(root.resolve("f.txt"), "abc");
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.statAt(null, new Object[] { dir, Set.of("symlink-follow"), "f.txt" });
-        WitResult wr = (WitResult) result[0];
+        WitResult wr = filesystem.descriptorStatAt(null, dir, Set.of("symlink-follow"), "f.txt");
         assertTrue(wr.ok());
         @SuppressWarnings("unchecked")
         Map<String, Object> stat = (Map<String, Object>) wr.value();
@@ -531,10 +666,9 @@ public class WasiFilesystemContextTest {
         Path root = fs.getPath("/sandbox");
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.statAt(null,
-                new Object[] { dir, Set.of("symlink-follow"), "../../etc/passwd" });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("access"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorStatAt(null, dir, Set.of("symlink-follow"), "../../etc/passwd");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("access"), wr.value());
     }
 
     @Test
@@ -542,9 +676,9 @@ public class WasiFilesystemContextTest {
         WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
         WitResource dir = preopen(filesystem, fs.getPath("/"), ".");
 
-        Object[] result = filesystem.statAt(null, new Object[] { dir, Set.of(), "missing.txt" });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("no-entry"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorStatAt(null, dir, Set.of(), "missing.txt");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("no-entry"), wr.value());
     }
 
     @Test
@@ -554,9 +688,8 @@ public class WasiFilesystemContextTest {
         Files.writeString(root.resolve("orig.txt"), "content");
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.linkAt(null,
-                new Object[] { dir, Set.of(), "orig.txt", dir, "linked.txt" });
-        assertTrue(((WitResult) result[0]).ok());
+        WitResult wr = filesystem.descriptorLinkAt(null, dir, Set.of(), "orig.txt", dir, "linked.txt");
+        assertTrue(wr.ok());
         assertEquals("content", Files.readString(root.resolve("linked.txt")));
     }
 
@@ -567,9 +700,9 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "f.txt", true, true);
 
-        Object[] result = filesystem.linkAt(null, new Object[] { file, Set.of(), "a", dir, "b" });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("not-directory"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorLinkAt(null, file, Set.of(), "a", dir, "b");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("not-directory"), wr.value());
     }
 
     @Test
@@ -579,8 +712,8 @@ public class WasiFilesystemContextTest {
         Files.writeString(root.resolve("old.txt"), "content");
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.renameAt(null, new Object[] { dir, "old.txt", dir, "new.txt" });
-        assertTrue(((WitResult) result[0]).ok());
+        WitResult wr = filesystem.descriptorRenameAt(null, dir, "old.txt", dir, "new.txt");
+        assertTrue(wr.ok());
         assertFalse(Files.exists(root.resolve("old.txt")));
         assertEquals("content", Files.readString(root.resolve("new.txt")));
     }
@@ -590,9 +723,29 @@ public class WasiFilesystemContextTest {
         WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
         WitResource dir = preopen(filesystem, fs.getPath("/"), ".");
 
-        Object[] result = filesystem.renameAt(null, new Object[] { dir, "missing.txt", dir, "new.txt" });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("no-entry"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorRenameAt(null, dir, "missing.txt", dir, "new.txt");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("no-entry"), wr.value());
+    }
+
+    @Test
+    public void readlinkAtIsUnsupported() {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        WitResource dir = preopen(filesystem, fs.getPath("/"), ".");
+
+        WitResult wr = filesystem.descriptorReadlinkAt(null, dir, "anything");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("unsupported"), wr.value());
+    }
+
+    @Test
+    public void symlinkAtIsUnsupported() {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        WitResource dir = preopen(filesystem, fs.getPath("/"), ".");
+
+        WitResult wr = filesystem.descriptorSymlinkAt(null, dir, "old", "new");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("unsupported"), wr.value());
     }
 
     @Test
@@ -602,8 +755,8 @@ public class WasiFilesystemContextTest {
         Files.createDirectory(root.resolve("empty"));
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.removeDirectoryAt(null, new Object[] { dir, "empty" });
-        assertTrue(((WitResult) result[0]).ok());
+        WitResult wr = filesystem.descriptorRemoveDirectoryAt(null, dir, "empty");
+        assertTrue(wr.ok());
         assertFalse(Files.exists(root.resolve("empty")));
     }
 
@@ -614,9 +767,9 @@ public class WasiFilesystemContextTest {
         Files.writeString(root.resolve("f.txt"), "x");
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.removeDirectoryAt(null, new Object[] { dir, "f.txt" });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("not-directory"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorRemoveDirectoryAt(null, dir, "f.txt");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("not-directory"), wr.value());
     }
 
     @Test
@@ -624,9 +777,9 @@ public class WasiFilesystemContextTest {
         WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
         WitResource dir = preopen(filesystem, fs.getPath("/"), ".");
 
-        Object[] result = filesystem.removeDirectoryAt(null, new Object[] { dir, "missing" });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("no-entry"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorRemoveDirectoryAt(null, dir, "missing");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("no-entry"), wr.value());
     }
 
     @Test
@@ -636,8 +789,8 @@ public class WasiFilesystemContextTest {
         Files.writeString(root.resolve("f.txt"), "x");
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.unlinkFileAt(null, new Object[] { dir, "f.txt" });
-        assertTrue(((WitResult) result[0]).ok());
+        WitResult wr = filesystem.descriptorUnlinkFileAt(null, dir, "f.txt");
+        assertTrue(wr.ok());
         assertFalse(Files.exists(root.resolve("f.txt")));
     }
 
@@ -648,9 +801,41 @@ public class WasiFilesystemContextTest {
         Files.createDirectory(root.resolve("d"));
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.unlinkFileAt(null, new Object[] { dir, "d" });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("is-directory"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorUnlinkFileAt(null, dir, "d");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("is-directory"), wr.value());
+    }
+
+    @Test
+    public void isSameObjectTrueForSamePathDifferentDescriptors() throws Exception {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        Path root = fs.getPath("/");
+        Files.writeString(root.resolve("f.txt"), "x");
+        WitResource dir = preopen(filesystem, root, ".");
+        WitResource file1 = openFile(filesystem, dir, "f.txt", false, false);
+        WitResource file2 = openFile(filesystem, dir, "f.txt", false, false);
+
+        assertTrue(filesystem.descriptorIsSameObject(null, file1, file2));
+    }
+
+    @Test
+    public void isSameObjectFalseForDifferentFiles() throws Exception {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        Path root = fs.getPath("/");
+        Files.writeString(root.resolve("a.txt"), "a");
+        Files.writeString(root.resolve("b.txt"), "b");
+        WitResource dir = preopen(filesystem, root, ".");
+        WitResource fileA = openFile(filesystem, dir, "a.txt", false, false);
+        WitResource fileB = openFile(filesystem, dir, "b.txt", false, false);
+
+        assertFalse(filesystem.descriptorIsSameObject(null, fileA, fileB));
+    }
+
+    @Test
+    public void isSameObjectFalseForUnknownDescriptor() {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        WitResource dir = preopen(filesystem, fs.getPath("/"), ".");
+        assertFalse(filesystem.descriptorIsSameObject(null, dir, resourceOf(999)));
     }
 
     @Test
@@ -661,8 +846,7 @@ public class WasiFilesystemContextTest {
         WitResource dir = preopen(filesystem, root, ".");
         WitResource file = openFile(filesystem, dir, "f.txt", false, false);
 
-        Object[] result = filesystem.metadataHash(null, new Object[] { file });
-        WitResult wr = (WitResult) result[0];
+        WitResult wr = filesystem.descriptorMetadataHash(null, file);
         assertTrue(wr.ok());
         @SuppressWarnings("unchecked")
         Map<String, Object> hash = (Map<String, Object>) wr.value();
@@ -679,8 +863,8 @@ public class WasiFilesystemContextTest {
         Files.writeString(root.resolve("f.txt"), "x");
         WitResource dir = preopen(filesystem, root, ".");
 
-        Object[] result = filesystem.metadataHashAt(null, new Object[] { dir, Set.of(), "f.txt" });
-        assertTrue(((WitResult) result[0]).ok());
+        WitResult wr = filesystem.descriptorMetadataHashAt(null, dir, Set.of(), "f.txt");
+        assertTrue(wr.ok());
     }
 
     @Test
@@ -688,9 +872,15 @@ public class WasiFilesystemContextTest {
         WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
         WitResource dir = preopen(filesystem, fs.getPath("/"), ".");
 
-        Object[] result = filesystem.metadataHashAt(null, new Object[] { dir, Set.of(), "missing.txt" });
-        assertFalse(((WitResult) result[0]).ok());
-        assertEquals(new WitEnum("no-entry"), ((WitResult) result[0]).value());
+        WitResult wr = filesystem.descriptorMetadataHashAt(null, dir, Set.of(), "missing.txt");
+        assertFalse(wr.ok());
+        assertEquals(new WitEnum("no-entry"), wr.value());
+    }
+
+    @Test
+    public void filesystemErrorCodeIsAlwaysEmpty() {
+        WasiFilesystemContext filesystem = newLinkedFilesystem(new WasiIoContext());
+        assertEquals(Optional.empty(), filesystem.typesFilesystemErrorCode(null, resourceOf(1)));
     }
 
     @Test
@@ -762,8 +952,8 @@ public class WasiFilesystemContextTest {
         WitResource sub = (WitResource) result.value();
 
         // The returned descriptor really is a directory: create-directory-at works on it.
-        Object[] createResult = filesystem.createDirectoryAt(null, new Object[] { sub, "nested" });
-        assertTrue(((WitResult) createResult[0]).ok());
+        WitResult createResult = filesystem.descriptorCreateDirectoryAt(null, sub, "nested");
+        assertTrue(createResult.ok());
     }
 
     @Test
