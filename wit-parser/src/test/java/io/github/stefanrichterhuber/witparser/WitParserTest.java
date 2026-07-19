@@ -93,12 +93,58 @@ class WitParserTest {
         assertEquals(Optional.of(type(WitTypeKind.RESULT)), read.result());
     }
 
+    /**
+     * Resolves the standalone {@code wasi:sockets@0.2.8} package's own
+     * "imports" world -- a package that depends on {@code deps/clocks} and
+     * {@code deps/io}, and whose own world is named "imports", exactly like
+     * every other individual WASI sub-package's world (see
+     * {@link WitParser#resolveWorld}'s javadoc on why the lookup must be
+     * scoped to the top-level package rather than matching by bare name
+     * across every resolved package).
+     */
+    @Test
+    void resolvesWasiSocketsImportsWorld() throws URISyntaxException {
+        Path wasiSocketsWitDir = wasiSocketsWitDirectory();
+
+        List<WitInterface> interfaces = WitParser.resolveWorld(wasiSocketsWitDir, "imports");
+
+        // 7 explicitly imported by wasi:sockets itself, plus wasi:io/{poll,error,streams} and
+        // wasi:clocks/monotonic-clock pulled in transitively via `use` (e.g. tcp-socket.accept
+        // returns tuple<tcp-socket, input-stream, output-stream>).
+        Set<String> names = interfaces.stream().map(WitInterface::name).collect(Collectors.toSet());
+        assertEquals(11, interfaces.size(), "expected interfaces: " + String.join(", ", names));
+        assertEquals(Set.of(
+                "wasi:sockets/network", "wasi:sockets/instance-network", "wasi:sockets/udp",
+                "wasi:sockets/udp-create-socket", "wasi:sockets/tcp", "wasi:sockets/tcp-create-socket",
+                "wasi:sockets/ip-name-lookup", "wasi:io/poll", "wasi:io/error", "wasi:io/streams",
+                "wasi:clocks/monotonic-clock"),
+                names);
+
+        WitInterface tcp = interfaces.stream().filter(i -> i.name().equals("wasi:sockets/tcp"))
+                .findFirst().orElseThrow();
+        assertEquals(List.of("tcp-socket"), tcp.resources());
+
+        // tcp-socket.accept -> result<tuple<own<tcp-socket>, own<input-stream>, own<output-stream>>, error-code>
+        WitFunction accept = tcp.functions().stream()
+                .filter(f -> f.name().equals("[method]tcp-socket.accept")).findFirst().orElseThrow();
+        assertEquals(Optional.of(type(WitTypeKind.RESULT)), accept.result());
+
+        WitInterface network = interfaces.stream().filter(i -> i.name().equals("wasi:sockets/network"))
+                .findFirst().orElseThrow();
+        assertEquals(List.of("network"), network.resources());
+        assertEquals(List.of(), network.functions(), "network's own resource has zero methods");
+    }
+
     private static WitValueType type(WitTypeKind kind) {
         return new WitValueType(kind, null);
     }
 
     private static Path wasiCliWitDirectory() throws URISyntaxException {
         return Path.of(WitParserTest.class.getResource("/wit/wasi-cli/wit").toURI());
+    }
+
+    private static Path wasiSocketsWitDirectory() throws URISyntaxException {
+        return Path.of(WitParserTest.class.getResource("/wit/wasi-sockets").toURI());
     }
 
     private static Path copyResourceToTempFile(String resource) throws IOException {

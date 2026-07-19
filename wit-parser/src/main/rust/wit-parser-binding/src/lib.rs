@@ -218,20 +218,30 @@ fn parse_wit_source(path: &str) -> anyhow::Result<Vec<ParsedInterface>> {
 /// `Resolve` pre-flattens these, so no manual `include`-walking is needed).
 /// Exports are intentionally not surfaced; `WasmComponentContext` only
 /// models host-provided imports.
+///
+/// The world lookup is scoped to the package `push_path` resolves directly
+/// from `dir` (as opposed to anything found under `dir/deps`) -- WASI's own
+/// sub-packages each define their own world literally named `"imports"`, so
+/// matching by bare name alone across every resolved package (including
+/// dependencies) is ambiguous.
 fn resolve_world_source(dir: &str, world_name: &str) -> anyhow::Result<Vec<ParsedInterface>> {
     let mut resolve = Resolve::default();
-    resolve.push_path(Path::new(dir))?;
+    let (top_package_id, _) = resolve.push_path(Path::new(dir))?;
 
     let world_ids: Vec<_> = resolve
         .worlds
         .iter()
-        .filter(|(_, w)| w.name == world_name)
+        .filter(|(_, w)| w.name == world_name && w.package == Some(top_package_id))
         .map(|(id, _)| id)
         .collect();
     let world_id = match world_ids.as_slice() {
         [id] => *id,
-        [] => anyhow::bail!("no world named '{world_name}' found in {dir}"),
-        _ => anyhow::bail!("multiple worlds named '{world_name}' found in {dir}"),
+        [] => anyhow::bail!(
+            "no world named '{world_name}' found in the top-level package of {dir}"
+        ),
+        _ => anyhow::bail!(
+            "multiple worlds named '{world_name}' found in the top-level package of {dir}"
+        ),
     };
     let world = &resolve.worlds[world_id];
 
