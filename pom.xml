@@ -30,6 +30,7 @@
 
     <modules>
         <module>wasmtimejavang</module>
+        <module>wit-parser</module>
     </modules>
 
     <properties>
