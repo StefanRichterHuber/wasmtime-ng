@@ -1,22 +1,29 @@
 package io.github.stefanrichterhuber.witcodegen;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 import io.github.stefanrichterhuber.witparser.WitFunction;
 import io.github.stefanrichterhuber.witparser.WitInterface;
 import io.github.stefanrichterhuber.witparser.WitParam;
-import io.github.stefanrichterhuber.witparser.WitType;
+import io.github.stefanrichterhuber.witparser.WitTypeKind;
+import io.github.stefanrichterhuber.witparser.WitValueType;
 
 /**
  * Generates an abstract {@code WasmComponentContext} implementation from a
  * single {@link WitInterface}: all of the interface-name/version/
- * {@code getImportFunctions()} plumbing is filled in concretely, and one
- * abstract, typed method is emitted per WIT function -- callers extend the
+ * {@code getImportFunctions()}/{@code getImportResources()} plumbing is
+ * filled in concretely, and one abstract, typed method is emitted per WIT
+ * function (plus one abstract destructor per resource) -- callers extend the
  * generated class and only implement those.
  * <br>
- * Only the primitive types {@link WitType} covers are supported; this
- * mirrors the equivalent restriction in the native {@code wit-parser}
- * binding this plugin is built on.
+ * Every {@link WitTypeKind} maps to a fixed Java type (see {@link #javaType}):
+ * nested structure (record field types, variant payload types, etc.) isn't
+ * modeled in the generated signature, matching how the hand-written
+ * {@code wasip2} contexts already represent these shapes as opaque
+ * {@code Map}/{@code WitVariant}/etc. wrappers cast by the implementer.
  */
 public final class WitCodeGenerator {
 
@@ -48,22 +55,22 @@ public final class WitCodeGenerator {
         String className = className(iface.name());
         String simpleName = simpleName(iface.name());
 
-        StringBuilder importFunctions = new StringBuilder();
+        StringBuilder importFunctionEntries = new StringBuilder();
         StringBuilder abstractMethods = new StringBuilder();
         StringBuilder implMethods = new StringBuilder();
 
         List<WitFunction> functions = iface.functions();
         for (int i = 0; i < functions.size(); i++) {
             WitFunction function = functions.get(i);
-            String methodName = camelCase(function.name());
+            String methodName = methodName(function.name());
             String implName = methodName + "Impl";
 
-            importFunctions.append("                new ComponentImportFunction(versioned, \"")
+            importFunctionEntries.append("                new ComponentImportFunction(versioned(), \"")
                     .append(function.name())
                     .append("\", this::")
                     .append(implName)
                     .append(")");
-            importFunctions.append(i < functions.size() - 1 ? ",\n" : "\n");
+            importFunctionEntries.append(i < functions.size() - 1 ? ",\n" : "\n");
 
             String returnType = function.result().map(WitCodeGenerator::javaType).orElse("void");
             StringBuilder paramList = new StringBuilder("WasmtimeComponentInstance instance");
@@ -80,7 +87,7 @@ public final class WitCodeGenerator {
                 WitParam param = params.get(p);
                 implBody.append("        ").append(javaType(param.type())).append(' ')
                         .append(camelCase(param.name())).append(" = (")
-                        .append(boxedType(param.type())).append(") args[").append(p).append("];\n");
+                        .append(castType(param.type())).append(") args[").append(p).append("];\n");
             }
             StringBuilder callArgs = new StringBuilder("instance");
             for (WitParam param : params) {
@@ -98,11 +105,30 @@ public final class WitCodeGenerator {
                     .append(implBody).append("    }\n\n");
         }
 
+        StringBuilder resourceDestructors = new StringBuilder();
+        StringBuilder importResourceEntries = new StringBuilder();
+        List<String> resources = iface.resources();
+        for (int i = 0; i < resources.size(); i++) {
+            String resourceName = resources.get(i);
+            String pascalResourceName = pascalCase(resourceName);
+            resourceDestructors.append("    protected abstract void drop").append(pascalResourceName)
+                    .append("(int rep);\n\n");
+            importResourceEntries.append("                new ComponentImportResource(versioned(), \"")
+                    .append(resourceName).append("\", this::drop").append(pascalResourceName).append(")");
+            importResourceEntries.append(i < resources.size() - 1 ? ",\n" : "\n");
+        }
+        String importResourcesBody = resources.isEmpty()
+                ? "List.of()"
+                : "List.of(\n" + importResourceEntries + "            )";
+
+        String extraImports = String.join("\n", requiredImports(iface));
+
         return """
                 package %s;
 
                 import java.util.List;
                 import java.util.Set;
+                %s
 
                 import io.github.stefanrichterhuber.wasmtimejavang.SemanticVersion;
                 import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
@@ -123,16 +149,19 @@ public final class WitCodeGenerator {
                         return "%s";
                     }
 
+                    private String versioned() {
+                        return INTERFACE + "@" + version;
+                    }
+
                     @Override
                     public List<ComponentImportFunction> getImportFunctions() {
-                        String versioned = INTERFACE + "@" + version;
                         return List.of(
                 %s            );
                     }
 
                     @Override
                     public List<ComponentImportResource> getImportResources() {
-                        return List.of();
+                        return %s;
                     }
 
                     @Override
@@ -151,9 +180,43 @@ public final class WitCodeGenerator {
                         return version;
                     }
 
-                %s%s}
-                """.formatted(targetPackage, iface.name(), className, iface.name(), simpleName,
-                importFunctions, abstractMethods, implMethods);
+                %s%s%s}
+                """.formatted(targetPackage, extraImports, iface.name(), className, iface.name(),
+                simpleName, importFunctionEntries, importResourcesBody, abstractMethods,
+                resourceDestructors, implMethods);
+    }
+
+    /** Extra imports beyond the always-present {@code java.util.{List,Set}}, only for the WIT
+     * shapes this interface's functions actually use. */
+    private static Set<String> requiredImports(WitInterface iface) {
+        Set<WitTypeKind> kinds = new LinkedHashSet<>();
+        for (WitFunction function : iface.functions()) {
+            for (WitParam param : function.params()) {
+                kinds.add(param.type().kind());
+            }
+            function.result().ifPresent(t -> kinds.add(t.kind()));
+        }
+
+        Set<String> imports = new TreeSet<>();
+        if (kinds.contains(WitTypeKind.OPTION)) {
+            imports.add("import java.util.Optional;");
+        }
+        if (kinds.contains(WitTypeKind.RECORD)) {
+            imports.add("import java.util.Map;");
+        }
+        if (kinds.contains(WitTypeKind.VARIANT)) {
+            imports.add("import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;");
+        }
+        if (kinds.contains(WitTypeKind.ENUM)) {
+            imports.add("import io.github.stefanrichterhuber.wasmtimejavang.component.WitEnum;");
+        }
+        if (kinds.contains(WitTypeKind.RESULT)) {
+            imports.add("import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;");
+        }
+        if (kinds.contains(WitTypeKind.RESOURCE)) {
+            imports.add("import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;");
+        }
+        return imports;
     }
 
     private static String simpleName(String interfaceName) {
@@ -177,8 +240,26 @@ public final class WitCodeGenerator {
                 : Character.toLowerCase(pascal.charAt(0)) + pascal.substring(1);
     }
 
-    private static String javaType(WitType type) {
-        return switch (type) {
+    /**
+     * Converts a WIT function name -- possibly the bracketed form
+     * {@code wit-parser} itself produces for resource methods (e.g.
+     * {@code "[method]input-stream.read"}) -- into a Java method name,
+     * folding the resource name in (e.g. {@code "inputStreamRead"}) so
+     * same-named methods on different resources in one interface don't
+     * collide, matching the hand-written {@code wasip2} contexts' own
+     * naming convention.
+     */
+    private static String methodName(String witFuncName) {
+        String stripped = witFuncName;
+        int bracketEnd = stripped.indexOf(']');
+        if (bracketEnd >= 0) {
+            stripped = stripped.substring(bracketEnd + 1);
+        }
+        return camelCase(stripped.replace('.', '-'));
+    }
+
+    private static String javaType(WitValueType type) {
+        return switch (type.kind()) {
             case BOOL -> "boolean";
             case S8, U8, S16, U16, S32, U32 -> "int";
             case S64, U64 -> "long";
@@ -186,18 +267,31 @@ public final class WitCodeGenerator {
             case F64 -> "double";
             case CHAR -> "char";
             case STRING -> "String";
+            case LIST_U8 -> "byte[]";
+            case LIST -> "List<Object>";
+            case OPTION -> "Optional<Object>";
+            case RESULT -> "WitResult";
+            case TUPLE -> "Object[]";
+            case RECORD -> "Map<String, Object>";
+            case VARIANT -> "WitVariant";
+            case ENUM -> "WitEnum";
+            case FLAGS -> "Set<String>";
+            case RESOURCE -> "WitResource";
         };
     }
 
-    private static String boxedType(WitType type) {
-        return switch (type) {
+    /** The type an {@code (X) args[i]} cast expression should use -- the boxed wrapper for
+     * primitives (autoboxing means {@code args[i]} is never actually a primitive), the same
+     * type as {@link #javaType} for everything else. */
+    private static String castType(WitValueType type) {
+        return switch (type.kind()) {
             case BOOL -> "Boolean";
             case S8, U8, S16, U16, S32, U32 -> "Integer";
             case S64, U64 -> "Long";
             case F32 -> "Float";
             case F64 -> "Double";
             case CHAR -> "Character";
-            case STRING -> "String";
+            default -> javaType(type);
         };
     }
 }
