@@ -31,6 +31,7 @@
     <modules>
         <module>wasmtimejavang</module>
         <module>wit-parser</module>
+        <module>wit-codegen-maven-plugin</module>
     </modules>
 
     <properties>

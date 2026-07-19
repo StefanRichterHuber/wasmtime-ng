@@ -1,0 +1,6 @@
+package my:custom@1.0.0;
+
+interface greet {
+    hello: func(name: string) -> string;
+    add: func(a: u32, b: u32) -> u32;
+}
