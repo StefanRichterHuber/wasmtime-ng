@@ -33,6 +33,15 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- Only needed by WasmtimeWasiRandomTest: its compiled wasm32-wasip2 test
+        fixture's built-in componentization imports wasi:clocks transitively
+        (depending on the Rust toolchain), auto-linked by linkRequired(). -->
+        <dependency>
+            <groupId>io.github.stefanrichterhuber</groupId>
+            <artifactId>wasmtimejavang-wasi-clocks</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
