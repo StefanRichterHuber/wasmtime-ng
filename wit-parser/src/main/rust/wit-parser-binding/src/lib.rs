@@ -7,7 +7,7 @@ use jni::objects::{JClass, JObject, JObjectArray, JString};
 use jni::strings::JNIString;
 use jni::sys::jsize;
 use log::debug;
-use wit_parser::{Handle, Interface, Resolve, Type, TypeDefKind, WorldItem};
+use wit_parser::{Handle, Interface, Resolve, Type, TypeDefKind, TypeId, WorldItem};
 
 bind_java_type! {
     rust_type = pub JWitParam,
@@ -70,6 +70,30 @@ struct ParsedInterface {
     resources: Vec<String>,
 }
 
+/// Follows `TypeDefKind::Type` alias indirections starting at `id` until
+/// reaching the canonical `TypeDefKind::Resource` definition, returning its
+/// type id and declared name. WIT permits re-exposing a resource under a
+/// plain type alias (e.g. `wasi:http/types`' `type headers = fields;`,
+/// `type trailers = fields;`) -- these are the *same* resource type at the
+/// component-model ABI level, not independent resource kinds, so a handle
+/// (`own`/`borrow`) pointing at the alias's type id must still be reported
+/// under the canonical resource's name. Without this, `headers`/`trailers`
+/// would surface as separate resources from `fields`, and `wasmtime`'s
+/// component linker rejects the mismatch at instantiation ("instance export
+/// `trailers` has the wrong type").
+fn canonical_resource(resolve: &Resolve, mut id: TypeId) -> (TypeId, String) {
+    loop {
+        let def = &resolve.types[id];
+        match &def.kind {
+            TypeDefKind::Type(Type::Id(inner)) => id = *inner,
+            _ => {
+                let name = def.name.clone().unwrap_or_else(|| "unknown".to_string());
+                return (id, name);
+            }
+        }
+    }
+}
+
 /// Classifies a `wit_parser::Type` down to the fixed set of shapes
 /// `WitTypeKind` (Java side) understands, recursing through named type
 /// aliases (`TypeDefKind::Type`) and resource handles. Nested structure
@@ -124,10 +148,7 @@ fn classify(resolve: &Resolve, ty: &Type) -> anyhow::Result<(&'static str, Optio
                         Handle::Own(id) => *id,
                         Handle::Borrow(id) => *id,
                     };
-                    let resource_name = resolve.types[resource_id]
-                        .name
-                        .clone()
-                        .unwrap_or_else(|| "unknown".to_string());
+                    let (_, resource_name) = canonical_resource(resolve, resource_id);
                     ("resource", Some(resource_name))
                 }
                 other => anyhow::bail!("unsupported WIT type shape: {}", other.as_str()),
@@ -158,10 +179,9 @@ fn collect_resource_names(resolve: &Resolve, ty: &Type, seen: &mut HashSet<Strin
                 Handle::Own(id) => *id,
                 Handle::Borrow(id) => *id,
             };
-            if let Some(name) = &resolve.types[resource_id].name {
-                if seen.insert(name.clone()) {
-                    out.push(name.clone());
-                }
+            let (_, name) = canonical_resource(resolve, resource_id);
+            if seen.insert(name.clone()) {
+                out.push(name);
             }
         }
         TypeDefKind::Tuple(tuple) => {

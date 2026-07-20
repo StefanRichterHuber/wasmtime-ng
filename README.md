@@ -268,16 +268,17 @@ try (
 
 ### Supported WASI Preview 2 interfaces
 
-Each interface group lives in its own `WasmComponentContext` implementation under the `wasip2` package, and all six are auto-discovered by `linkRequired(...)` with zero configuration.
+Each interface group lives in its own `WasmComponentContext` implementation under the `wasip2` package, and all seven are auto-discovered by `linkRequired(...)` with zero configuration.
 
 | Interfaces | Class | Status | Configuration |
 | :--- | :--- | :---: | :--- |
 | `wasi:cli/environment,exit,stdin,stdout,stderr,terminal-*` | `WasiCliContext` | ✅ | `withEnvs(Map)`, `withArguments(List)`, `withStdIn/StdOut/StdErr(...)`. `terminal-*` always reports "not a tty" |
 | `wasi:clocks/monotonic-clock,wall-clock` | `WasiClocksContext` | ✅ | none (uses `System.nanoTime()`/`System.currentTimeMillis()`) |
 | `wasi:random/random,insecure,insecure-seed` | `WasiRandomContext` | ✅ | `withSecureRandom(Random)`, `withRandom(Random)` (the insecure generator) |
-| `wasi:io/poll,streams,error` | `WasiIoContext` | ✅ | Owns the shared stream/pollable tables other contexts (`WasiCliContext`, `WasiClocksContext`, `WasiFilesystemContext`, `WasiSocketsContext`) depend on. Both blocking and non-blocking reads/skips are implemented (`[method]input-stream.{blocking-,}read`/`{blocking-,}skip`, the batch `poll` function, `[method]pollable.ready`) |
+| `wasi:io/poll,streams,error` | `WasiIoContext` | ✅ | Owns the shared stream/pollable tables other contexts (`WasiCliContext`, `WasiClocksContext`, `WasiFilesystemContext`, `WasiSocketsContext`, `WasiHttpContext`) depend on. Both blocking and non-blocking reads/skips are implemented (`[method]input-stream.{blocking-,}read`/`{blocking-,}skip`, the batch `poll` function, `[method]pollable.ready`) |
 | `wasi:filesystem/types,preopens` | `WasiFilesystemContext` | ✅ | `withDirectory(Path host, String client)` (repeatable). No symlink support by design: `symlink-at`/`readlink-at` report `unsupported`, and `path-flags.symlink-follow` is ignored — host paths always resolve following symlinks |
 | `wasi:sockets/network,instance-network,tcp(-create-socket),udp(-create-socket),ip-name-lookup` | `WasiSocketsContext` | ✅ | None — a guest creates/binds/connects/listens its own sockets, same as on a real host. IPv4 only (`ipv6` rejected as `not-supported`, `[method]{tcp,udp}-socket.address-family` always reports `ipv4`). Some options `java.net` has no equivalent for (TCP `hop-limit`, TCP keep-alive idle-time/interval/count, UDP `unicast-hop-limit`) are stored and returned as configured but not actually applied to the OS socket |
+| `wasi:http/types,outgoing-handler` | `WasiHttpContext` | 🟡 | None — a guest makes outgoing HTTP calls (`fetch()`-style) via a real, blocking `java.net.http.HttpClient` call. `request-options#between-bytes-timeout` has no `HttpClient` equivalent (stored but not applied). `wasi:http/incoming-handler` (a guest *exporting* a request handler, for reverse-proxy-style hosting) isn't implemented yet |
 
 `WasiFilesystemContext` mirrors WASI Preview 1's filesystem support (`WasiPI1Context` + `withDirectory`): preopened host directories are exposed as `descriptor` resources sandboxed the same way -- a guest path can never resolve outside its preopened directory, no matter how many `..` segments it contains. Reads/writes go through `wasi:io/streams` the same way `wasi:cli/stdout` does: `[method]descriptor.read-via-stream`/`write-via-stream`/`append-via-stream` hand out `input-stream`/`output-stream` resources from the shared `wasi-io` table (so it depends on `"wasi-io"` the same way `WasiCliContext` and `WasiClocksContext` do), rather than reading/writing bytes directly.
 
@@ -303,6 +304,14 @@ Unlike `WasiFilesystemContext`, `WasiSocketsContext` needs no configuration at a
 linker.linkContext(new WasiCliContext().withStdOut(System.out));
 linker.linkContext(new WasiSocketsContext());
 linker.linkRequired(component); // pulls in wasi-io, wasi-clocks, etc. as needed
+```
+
+`WasiHttpContext` likewise needs no configuration: `wasi:http/outgoing-handler` lets a guest make outbound HTTP requests, and every call is dispatched via a real `java.net.http.HttpClient`, synchronously, since (as with `WasiSocketsContext`'s two-phase operations) every host call in this bridge is already synchronous from the guest's perspective — there's no genuine asynchrony to preserve, so `future-incoming-response`/`future-trailers` are always already resolved by the time the guest polls them. `wasi:http` isn't part of `wasm32-wasip2`'s built-in WASI componentization the way `wasi:cli`/`wasi:clocks`/`wasi:sockets` are, so a guest needs `wit_bindgen::generate!` against the `wasi:http` WIT package to consume it (see [Implementing your own component context](#implementing-your-own-component-context) below for the general mechanism).
+
+```java
+linker.linkContext(new WasiCliContext().withStdOut(System.out));
+linker.linkContext(new WasiHttpContext());
+linker.linkRequired(component); // pulls in wasi-io, wasi-clocks, wasi-random
 ```
 
 ### Implementing your own component context
@@ -488,7 +497,7 @@ public void onDependenciesResolved(ComponentContextLookup lookup) {
 }
 ```
 
-**Auto-discovery.** To make a context discoverable by `linkRequired(component)` instead of linking it explicitly, declare the (bare, version-independent) interface names it implements via `getProvidedInterfaces()` (as `GreetComponentContext` already does above — a generated interface has this pre-wired as a `default` method already, so a generated-based implementer gets it for free) and register the class as a `WasmComponentContext` [`ServiceLoader`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/ServiceLoader.html) provider (a `META-INF/services/io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext` file listing the class, which needs a public no-arg constructor or a public static `provider()` method) — this is exactly how the six built-in `Wasi*Context` classes register themselves.
+**Auto-discovery.** To make a context discoverable by `linkRequired(component)` instead of linking it explicitly, declare the (bare, version-independent) interface names it implements via `getProvidedInterfaces()` (as `GreetComponentContext` already does above — a generated interface has this pre-wired as a `default` method already, so a generated-based implementer gets it for free) and register the class as a `WasmComponentContext` [`ServiceLoader`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/ServiceLoader.html) provider (a `META-INF/services/io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext` file listing the class, which needs a public no-arg constructor or a public static `provider()` method) — this is exactly how the seven built-in `Wasi*Context` classes register themselves.
 
 **Watch out:** `getProvidedInterfaces()` must be overridden (or, for a generated interface, already resolve correctly) even for a context that's *always* linked explicitly via `linkContext(...)` and never registered for `ServiceLoader` discovery — if that same call site also calls `linkRequired(...)` afterwards (as step 4 does), `linkRequired` has no other way to know the explicitly-linked context already satisfies the interface, and raises `IllegalStateException` for it. This is why the hand-written `GreetComponentContext` overrides `getProvidedInterfaces()` above even though it's never meant to be auto-discovered.
 
@@ -514,7 +523,7 @@ These generated interfaces are regular public types shipped in the jar, under `i
 
 ### Version negotiation
 
-Every `WasmComponentContext` tracks a `SemanticVersion` (`withVersion`/`getVersion`), used to build the actual versioned interface name (e.g. `"wasi:cli/environment@0.2.6"`) each import is registered under — `getProvidedInterfaces()` itself stays version-independent (bare names), so lookup/auto-discovery doesn't need to know a component's exact required version up front. `getMiniumVersion()`/`getMaximumVersion()` (defaulted to accept anything) bound what `supportsVersion(...)` — and therefore `ComponentContextLookup.resolve(...)` — accepts; the built-in WASI contexts default to `0.2.6` (what `cargo build --target wasm32-wasip2` on current stable Rust actually emits) and accept `[0.0.1, 0.3.0]`, so they're ready for the eventual WASI 0.3 interfaces without code changes once toolchains catch up, but can be pinned with `.withVersion(...)` if a component needs something else within that range.
+Every `WasmComponentContext` tracks a `SemanticVersion` (`withVersion`/`getVersion`), used to build the actual versioned interface name (e.g. `"wasi:cli/environment@0.2.6"`) each import is registered under — `getProvidedInterfaces()` itself stays version-independent (bare names), so lookup/auto-discovery doesn't need to know a component's exact required version up front. `getMiniumVersion()`/`getMaximumVersion()` (defaulted to accept anything) bound what `supportsVersion(...)` — and therefore `ComponentContextLookup.resolve(...)` — accepts; the built-in WASI contexts default to `0.2.6` (what `cargo build --target wasm32-wasip2` on current stable Rust actually emits) and accept `[0.0.1, 0.3.0]`, so they're ready for the eventual WASI 0.3 interfaces without code changes once toolchains catch up, but can be pinned with `.withVersion(...)` if a component needs something else within that range. `WasiHttpContext` is the one exception, defaulting to `0.2.8` and accepting `[0.2.0, 0.3.0]` — `wasi:http` isn't part of what the stable target emits automatically, so there's no single "current" version to match; `0.2.8` is simply what this project's own `wasi-http` WIT sources declare.
 
 ## Architecture
 

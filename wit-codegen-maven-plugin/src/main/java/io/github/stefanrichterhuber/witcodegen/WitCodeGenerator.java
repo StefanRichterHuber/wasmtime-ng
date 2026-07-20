@@ -87,7 +87,7 @@ public final class WitCodeGenerator {
             StringBuilder paramList = new StringBuilder("WasmtimeComponentInstance instance");
             for (WitParam param : function.params()) {
                 paramList.append(", ").append(javaType(param.type())).append(' ')
-                        .append(camelCase(param.name()));
+                        .append(paramName(param.name()));
             }
             abstractMethods.append("    ").append(returnType).append(' ')
                     .append(methodName).append('(').append(paramList).append(");\n\n");
@@ -97,12 +97,12 @@ public final class WitCodeGenerator {
             for (int p = 0; p < params.size(); p++) {
                 WitParam param = params.get(p);
                 implBody.append("        ").append(javaType(param.type())).append(' ')
-                        .append(camelCase(param.name())).append(" = (")
+                        .append(paramName(param.name())).append(" = (")
                         .append(castType(param.type())).append(") args[").append(p).append("];\n");
             }
             StringBuilder callArgs = new StringBuilder("instance");
             for (WitParam param : params) {
-                callArgs.append(", ").append(camelCase(param.name()));
+                callArgs.append(", ").append(paramName(param.name()));
             }
             if (function.result().isPresent()) {
                 implBody.append("        return new Object[] { ").append(methodName).append('(')
@@ -235,6 +235,31 @@ public final class WitCodeGenerator {
         String pascal = pascalCase(kebabCase);
         return pascal.isEmpty() ? pascal
                 : Character.toLowerCase(pascal.charAt(0)) + pascal.substring(1);
+    }
+
+    /**
+     * Reserved Java keywords and literals -- none of these are valid
+     * identifiers, but WIT param names aren't restricted from colliding with
+     * them (e.g. {@code outgoing-body.finish}'s {@code this: outgoing-body}
+     * parameter, a plain, explicitly-declared parameter here since
+     * {@code finish} is a {@code static} function, not a {@code [method]}
+     * with an implicit receiver).
+     */
+    private static final Set<String> JAVA_RESERVED_WORDS = Set.of(
+            "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",
+            "const", "continue", "default", "do", "double", "else", "enum", "extends", "final",
+            "finally", "float", "for", "goto", "if", "implements", "import", "instanceof", "int",
+            "interface", "long", "native", "new", "package", "private", "protected", "public",
+            "return", "short", "static", "strictfp", "super", "switch", "synchronized", "this",
+            "throw", "throws", "transient", "try", "void", "volatile", "while",
+            "true", "false", "null");
+
+    /** {@link #camelCase(String)}, escaped with a trailing underscore if it collides with a
+     * reserved Java word -- used for WIT parameter names, which aren't otherwise restricted
+     * from colliding with one. */
+    private static String paramName(String kebabCase) {
+        String name = camelCase(kebabCase);
+        return JAVA_RESERVED_WORDS.contains(name) ? name + "_" : name;
     }
 
     /**
