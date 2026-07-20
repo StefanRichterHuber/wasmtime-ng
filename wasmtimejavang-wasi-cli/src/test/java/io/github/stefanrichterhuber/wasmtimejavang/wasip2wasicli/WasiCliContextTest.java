@@ -22,7 +22,6 @@ import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext.Componen
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.ProcExitException;
-import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasicli.WasiCliContext;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
 
 /**

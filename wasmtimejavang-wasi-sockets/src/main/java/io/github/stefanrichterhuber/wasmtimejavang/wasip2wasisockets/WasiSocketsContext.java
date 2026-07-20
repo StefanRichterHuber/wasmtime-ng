@@ -458,8 +458,8 @@ public class WasiSocketsContext implements NetworkContext, InstanceNetworkContex
         if (entry == null || !entry.bound) {
             return errorResult("invalid-state");
         }
-        try {
-            ServerSocket serverSocket = new ServerSocket();
+        try (ServerSocket serverSocket = new ServerSocket();) {
+
             serverSocket.bind(entry.localAddress, (int) entry.backlog);
             entry.serverSocket = serverSocket;
             entry.pendingError = null;
@@ -805,8 +805,8 @@ public class WasiSocketsContext implements NetworkContext, InstanceNetworkContex
         if (entry == null || entry.pendingLocalAddress == null) {
             return errorResult("not-in-progress");
         }
-        try {
-            DatagramSocket socket = new DatagramSocket(entry.pendingLocalAddress);
+        try (DatagramSocket socket = new DatagramSocket(entry.pendingLocalAddress);) {
+
             if (entry.pendingReceiveBufferSize != null) {
                 socket.setReceiveBufferSize(entry.pendingReceiveBufferSize.intValue());
             }
