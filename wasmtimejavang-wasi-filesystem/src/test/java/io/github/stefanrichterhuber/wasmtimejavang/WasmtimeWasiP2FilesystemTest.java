@@ -19,8 +19,8 @@ import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
 
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
-import io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiCliContext;
-import io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiFilesystemContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasicli.WasiCliContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasifilesystem.WasiFilesystemContext;
 
 /**
  * Exercises {@code wasi:filesystem/types} and {@code wasi:filesystem/preopens}

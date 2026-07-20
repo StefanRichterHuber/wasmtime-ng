@@ -1,4 +1,4 @@
-package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
+package io.github.stefanrichterhuber.wasmtimejavang.wasip2wasisockets;
 
 import java.io.IOException;
 import java.net.BindException;
@@ -40,6 +40,8 @@ import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasisockets.
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasisockets.TcpCreateSocketContext;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasisockets.UdpContext;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasisockets.UdpCreateSocketContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
 
 /**
  * Implementation of {@code wasi:sockets/network}, {@code instance-network},

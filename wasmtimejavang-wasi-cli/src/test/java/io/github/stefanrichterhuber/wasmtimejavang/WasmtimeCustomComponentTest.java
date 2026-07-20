@@ -8,7 +8,7 @@ import java.io.FileInputStream;
 import org.junit.jupiter.api.Test;
 
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
-import io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiCliContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasicli.WasiCliContext;
 
 /**
  * End-to-end example of a component requiring a custom, non-WASI interface

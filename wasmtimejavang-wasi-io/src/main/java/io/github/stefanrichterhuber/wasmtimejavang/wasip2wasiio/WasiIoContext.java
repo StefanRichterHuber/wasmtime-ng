@@ -1,4 +1,4 @@
-package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
+package io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -244,8 +244,10 @@ public class WasiIoContext implements PollContext, ErrorContext, StreamsContext,
 
     @Override
     public String errorToDebugString(WasmtimeComponentInstance instance, WitResource self) {
-        // No real "error" resource is ever constructed with actual failure content (see class
-        // javadoc), so there is no genuine message to report -- just a generic, rep-derived label.
+        // No real "error" resource is ever constructed with actual failure content (see
+        // class
+        // javadoc), so there is no genuine message to report -- just a generic,
+        // rep-derived label.
         return "error(rep=" + self.rep() + ")";
     }
 

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext.ComponentImportFunction;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasirandom.WasiRandomContext;
 
 public class WasiRandomContextTest {
 

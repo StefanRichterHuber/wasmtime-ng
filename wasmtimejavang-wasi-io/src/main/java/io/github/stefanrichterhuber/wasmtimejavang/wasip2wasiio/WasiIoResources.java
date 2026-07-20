@@ -1,4 +1,4 @@
-package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
+package io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio;
 
 import java.io.InputStream;
 import java.io.OutputStream;

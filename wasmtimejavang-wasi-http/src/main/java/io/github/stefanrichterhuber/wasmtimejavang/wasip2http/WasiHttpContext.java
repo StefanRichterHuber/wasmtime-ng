@@ -1,4 +1,4 @@
-package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
+package io.github.stefanrichterhuber.wasmtimejavang.wasip2http;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -31,9 +31,12 @@ import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasihttp.OutgoingHandlerContext;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasihttp.TypesContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
 
 /**
- * Implementation of {@code wasi:http/types} and {@code wasi:http/outgoing-handler}
+ * Implementation of {@code wasi:http/types} and
+ * {@code wasi:http/outgoing-handler}
  * (WASI Preview 2, 0.2.8) -- the {@code "wasi-http"} component context.
  * <br>
  * Only the outgoing-request direction (a guest making outbound HTTP calls,
@@ -663,7 +666,10 @@ public class WasiHttpContext implements TypesContext, OutgoingHandlerContext {
                 : Optional.of(entry.betweenBytesTimeoutNanos);
     }
 
-    /** Stored but not applied -- {@link HttpClient} has no equivalent, see class javadoc. */
+    /**
+     * Stored but not applied -- {@link HttpClient} has no equivalent, see class
+     * javadoc.
+     */
     @Override
     public WitResult requestOptionsSetBetweenBytesTimeout(WasmtimeComponentInstance instance, WitResource self,
             Optional<Object> duration) {

@@ -1,4 +1,4 @@
-package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
+package io.github.stefanrichterhuber.wasmtimejavang.wasip2wasicli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -22,6 +22,8 @@ import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext.Componen
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.ProcExitException;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasicli.WasiCliContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
 
 /**
  * Direct unit tests for {@link WasiCliContext}, wiring its {@code "wasi-io"}

@@ -22,6 +22,8 @@ import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext.Componen
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
 
 /**
  * Direct unit tests for {@link WasiIoContext}: every import function/resource

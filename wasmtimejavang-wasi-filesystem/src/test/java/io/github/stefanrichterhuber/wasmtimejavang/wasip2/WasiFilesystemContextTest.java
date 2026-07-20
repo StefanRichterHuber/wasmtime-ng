@@ -33,6 +33,8 @@ import io.github.stefanrichterhuber.wasmtimejavang.component.WitEnum;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasifilesystem.WasiFilesystemContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
 
 /**
  * Direct unit tests for {@link WasiFilesystemContext}, wiring its {@code
@@ -146,7 +148,8 @@ public class WasiFilesystemContextTest {
                 "[method]descriptor.metadata-hash", "[method]descriptor.metadata-hash-at",
                 "[method]directory-entry-stream.read-directory-entry", "filesystem-error-code");
         for (String funcName : expectedTypeFuncs) {
-            assertTrue(functions.stream().anyMatch(f -> f.interfaceName().equals(types) && f.funcName().equals(funcName)),
+            assertTrue(
+                    functions.stream().anyMatch(f -> f.interfaceName().equals(types) && f.funcName().equals(funcName)),
                     "missing " + funcName);
         }
         assertTrue(functions.stream()
@@ -172,7 +175,8 @@ public class WasiFilesystemContextTest {
         assertTrue(resources.stream()
                 .anyMatch(r -> r.interfaceName().equals(preopens) && r.resourceName().equals("descriptor")));
 
-        // input-stream/output-stream destructors delegate to the shared "wasi-io" table.
+        // input-stream/output-stream destructors delegate to the shared "wasi-io"
+        // table.
         ComponentImportResource inputStreamResource = resources.stream()
                 .filter(r -> r.interfaceName().equals(types) && r.resourceName().equals("input-stream")).findFirst()
                 .orElseThrow();
@@ -951,7 +955,8 @@ public class WasiFilesystemContextTest {
         assertTrue(result.ok());
         WitResource sub = (WitResource) result.value();
 
-        // The returned descriptor really is a directory: create-directory-at works on it.
+        // The returned descriptor really is a directory: create-directory-at works on
+        // it.
         WitResult createResult = filesystem.descriptorCreateDirectoryAt(null, sub, "nested");
         assertTrue(createResult.ok());
     }

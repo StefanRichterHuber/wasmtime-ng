@@ -22,7 +22,7 @@ import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.Test;
 
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
-import io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiCliContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasicli.WasiCliContext;
 
 /**
  * Exercises {@code wasi:sockets} end to end: the wasm guest is the TCP

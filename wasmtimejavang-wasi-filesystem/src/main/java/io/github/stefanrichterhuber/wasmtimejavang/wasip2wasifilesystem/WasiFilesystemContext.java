@@ -1,4 +1,4 @@
-package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
+package io.github.stefanrichterhuber.wasmtimejavang.wasip2wasifilesystem;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,6 +40,8 @@ import io.github.stefanrichterhuber.wasmtimejavang.internal.PathSandbox;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.WasiFileType;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasifilesystem.PreopensContext;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasifilesystem.TypesContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
 
 /**
  * Implementation of {@code wasi:filesystem/types} and
@@ -90,7 +92,9 @@ public class WasiFilesystemContext implements TypesContext, PreopensContext {
     private static final String RESOURCE_DESCRIPTOR = "descriptor";
     private static final String RESOURCE_DIRECTORY_ENTRY_STREAM = "directory-entry-stream";
 
-    /** Upper bound on how many bytes a single {@code descriptor.read} call returns. */
+    /**
+     * Upper bound on how many bytes a single {@code descriptor.read} call returns.
+     */
     private static final int MAX_READ_CHUNK = 65536;
 
     private SemanticVersion version = SemanticVersion.parse("0.2.6");

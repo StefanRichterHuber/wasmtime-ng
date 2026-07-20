@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip1.ProcExitException;
-import io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiCliContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasicli.WasiCliContext;
 
 /**
  * Exercises {@code wasi:cli} end to end. {@code wasi:clocks} (needed by both

@@ -1,4 +1,4 @@
-package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
+package io.github.stefanrichterhuber.wasmtimejavang.wasip2wasirandom;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;

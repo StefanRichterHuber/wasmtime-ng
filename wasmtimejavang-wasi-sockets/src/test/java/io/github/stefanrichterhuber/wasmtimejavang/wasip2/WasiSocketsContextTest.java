@@ -26,6 +26,10 @@ import io.github.stefanrichterhuber.wasmtimejavang.component.WitEnum;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasicli.WasiCliContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasisockets.WasiSocketsContext;
 
 /**
  * Direct unit tests for {@link WasiSocketsContext}, wiring its {@code

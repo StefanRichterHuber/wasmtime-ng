@@ -14,11 +14,12 @@ import org.junit.jupiter.api.Test;
 import com.sun.net.httpserver.HttpServer;
 
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
-import io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiCliContext;
-import io.github.stefanrichterhuber.wasmtimejavang.wasip2.WasiHttpContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2http.WasiHttpContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasicli.WasiCliContext;
 
 /**
- * End-to-end test of {@link WasiHttpContext}'s {@code wasi:http/outgoing-handler}
+ * End-to-end test of {@link WasiHttpContext}'s
+ * {@code wasi:http/outgoing-handler}
  * support: a compiled component ({@code wasip2httptest}, the only fixture
  * besides {@code wasip2customtest} using {@code wit_bindgen::generate!},
  * since {@code wasi:http} isn't part of {@code wasm32-wasip2}'s built-in WASI
@@ -53,7 +54,9 @@ public class WasmtimeWasiHttpTest {
                     WasmtimeStore store = new WasmtimeStore(engine);
                     WasmtimeComponentLinker linker = new WasmtimeComponentLinker(engine, store)) {
 
-                assertTrue(component.getImportInterfaces().stream().anyMatch(n -> n.startsWith("wasi:http/outgoing-handler")),
+                assertTrue(
+                        component.getImportInterfaces().stream()
+                                .anyMatch(n -> n.startsWith("wasi:http/outgoing-handler")),
                         "component does not import wasi:http/outgoing-handler");
 
                 linker.linkContext(new WasiCliContext().withStdOut(stdout)

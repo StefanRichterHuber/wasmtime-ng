@@ -1,4 +1,4 @@
-package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
+package io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiclocks;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -13,6 +13,8 @@ import io.github.stefanrichterhuber.wasmtimejavang.WasmtimeComponentInstance;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasiclocks.MonotonicClockContext;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasiclocks.WallClockContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
 
 /**
  * Implementation of {@code wasi:clocks/monotonic-clock} and

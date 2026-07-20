@@ -10,10 +10,14 @@ This project allows Java applications to execute WebAssembly modules, interact w
 
 ## Project Structure
 
-This repository is a Maven multi-module reactor:
+This repository is a Maven multi-module reactor. As of this version, `wasmtimejavang` is a **core** artifact (Wasmtime primitives, the Component Model plumbing, WASI Preview 1) plus one artifact per WASI Preview 2 "world" — so a consumer only pulls in the WASI Preview 2 support they actually use, instead of everything at once:
 
-* **[`wasmtimejavang`](wasmtimejavang)** — the library you actually depend on (see [Usage](#usage) below); everything else on this page lives here.
-* **[`wit-parser`](wit-parser)** and **[`wit-codegen-maven-plugin`](wit-codegen-maven-plugin)** — build-time-only tooling, not a runtime dependency of `wasmtimejavang`. Together they let a *consuming* project generate typed, Java component-context interfaces straight from a WIT file instead of hand-writing them — see [Implementing your own component context](#implementing-your-own-component-context).
+* **[`wasmtimejavang`](wasmtimejavang)** — the core artifact everyone depends on: `WasmtimeEngine`/`WasmtimeModule`/`WasmtimeStore`/`WasmtimeInstance`/`WasmtimeLinker`/`WasmtimeMemory`/`WasmtimeFunction`, the Component Model plumbing (`WasmtimeComponent`, `WasmtimeComponentLinker`, `WasmtimeComponentInstance`, `WasmComponentContext`), the native Rust bridge (all platforms), and WASI Preview 1 (`WasiPI1Context`, WASI threads). See [Usage](#usage) below.
+* **[`wasmtimejavang-wasi-io`](wasmtimejavang-wasi-io)** — WASI Preview 2 `wasi:io/poll,streams,error`. Nearly every other WASI Preview 2 artifact depends on this one, since it owns the shared stream/pollable tables they hand resources out of.
+* **[`wasmtimejavang-wasi-clocks`](wasmtimejavang-wasi-clocks)**, **[`wasmtimejavang-wasi-random`](wasmtimejavang-wasi-random)**, **[`wasmtimejavang-wasi-cli`](wasmtimejavang-wasi-cli)**, **[`wasmtimejavang-wasi-filesystem`](wasmtimejavang-wasi-filesystem)**, **[`wasmtimejavang-wasi-sockets`](wasmtimejavang-wasi-sockets)**, **[`wasmtimejavang-wasi-http`](wasmtimejavang-wasi-http)** — one artifact per remaining WASI Preview 2 "world", each depending on `wasmtimejavang-wasi-io` where it needs shared streams/pollables (all but `wasi-random`, which needs nothing beyond core).
+* **[`wit-parser`](wit-parser)** and **[`wit-codegen-maven-plugin`](wit-codegen-maven-plugin)** — build-time-only tooling, not a runtime dependency of anything above. Together they let a *consuming* project (or, as of this version, every one of this repository's own WASI Preview 2 artifacts) generate typed, Java component-context interfaces straight from a WIT file instead of hand-writing them — see [Implementing your own component context](#implementing-your-own-component-context).
+
+Pick only the artifacts you need: depending on `wasmtimejavang` alone gets you core-wasm + WASI Preview 1, with no Component Model support at all; add whichever `wasmtimejavang-wasi-*` artifacts you actually need (each transitively pulls in `wasmtimejavang-wasi-io` where required) — e.g. just `wasmtimejavang-wasi-http` for an outgoing-HTTP-only guest, or `wasmtimejavang-wasi-cli` + `wasmtimejavang-wasi-filesystem` for a sandboxed-filesystem CLI tool.
 
 ## Prerequisites
 
@@ -53,12 +57,22 @@ mvn -P release,build-linux-x86-64,build-linux-aarch64,build-windows-x86_64 clean
 
 ## Usage
 
-Include the dependency into your project `pom.xml` (the published artifact contains native libraries for Linux x86_64, Linux aarch64 and Windows x86_64):
+Include the core dependency into your project `pom.xml` (the published artifact contains native libraries for Linux x86_64, Linux aarch64 and Windows x86_64):
 
 ```xml
 <dependency>
     <groupId>io.github.stefanrichterhuber</groupId>
     <artifactId>wasmtimejavang</artifactId>
+    <version>[Current Version]</version>
+</dependency>
+```
+
+This alone gets you core-wasm execution and WASI Preview 1 — no WASI Preview 2 / Component Model support. To run `wasm32-wasip2` components, add the WASI Preview 2 artifact(s) you actually need (see [Project Structure](#project-structure) above), e.g. for `wasi:http`:
+
+```xml
+<dependency>
+    <groupId>io.github.stefanrichterhuber</groupId>
+    <artifactId>wasmtimejavang-wasi-http</artifactId>
     <version>[Current Version]</version>
 </dependency>
 ```
@@ -268,17 +282,17 @@ try (
 
 ### Supported WASI Preview 2 interfaces
 
-Each interface group lives in its own `WasmComponentContext` implementation under the `wasip2` package, and all seven are auto-discovered by `linkRequired(...)` with zero configuration.
+Each interface group lives in its own `WasmComponentContext` implementation under the `wasip2` package, each in its own Maven artifact, and all seven are auto-discovered by `linkRequired(...)` with zero configuration as long as their artifact is on the classpath — see [Project Structure](#project-structure).
 
-| Interfaces | Class | Status | Configuration |
-| :--- | :--- | :---: | :--- |
-| `wasi:cli/environment,exit,stdin,stdout,stderr,terminal-*` | `WasiCliContext` | ✅ | `withEnvs(Map)`, `withArguments(List)`, `withStdIn/StdOut/StdErr(...)`. `terminal-*` always reports "not a tty" |
-| `wasi:clocks/monotonic-clock,wall-clock` | `WasiClocksContext` | ✅ | none (uses `System.nanoTime()`/`System.currentTimeMillis()`) |
-| `wasi:random/random,insecure,insecure-seed` | `WasiRandomContext` | ✅ | `withSecureRandom(Random)`, `withRandom(Random)` (the insecure generator) |
-| `wasi:io/poll,streams,error` | `WasiIoContext` | ✅ | Owns the shared stream/pollable tables other contexts (`WasiCliContext`, `WasiClocksContext`, `WasiFilesystemContext`, `WasiSocketsContext`, `WasiHttpContext`) depend on. Both blocking and non-blocking reads/skips are implemented (`[method]input-stream.{blocking-,}read`/`{blocking-,}skip`, the batch `poll` function, `[method]pollable.ready`) |
-| `wasi:filesystem/types,preopens` | `WasiFilesystemContext` | ✅ | `withDirectory(Path host, String client)` (repeatable). No symlink support by design: `symlink-at`/`readlink-at` report `unsupported`, and `path-flags.symlink-follow` is ignored — host paths always resolve following symlinks |
-| `wasi:sockets/network,instance-network,tcp(-create-socket),udp(-create-socket),ip-name-lookup` | `WasiSocketsContext` | ✅ | None — a guest creates/binds/connects/listens its own sockets, same as on a real host. IPv4 only (`ipv6` rejected as `not-supported`, `[method]{tcp,udp}-socket.address-family` always reports `ipv4`). Some options `java.net` has no equivalent for (TCP `hop-limit`, TCP keep-alive idle-time/interval/count, UDP `unicast-hop-limit`) are stored and returned as configured but not actually applied to the OS socket |
-| `wasi:http/types,outgoing-handler` | `WasiHttpContext` | 🟡 | None — a guest makes outgoing HTTP calls (`fetch()`-style) via a real, blocking `java.net.http.HttpClient` call. `request-options#between-bytes-timeout` has no `HttpClient` equivalent (stored but not applied). `wasi:http/incoming-handler` (a guest *exporting* a request handler, for reverse-proxy-style hosting) isn't implemented yet |
+| Interfaces | Class | Artifact | Status | Configuration |
+| :--- | :--- | :--- | :---: | :--- |
+| `wasi:cli/environment,exit,stdin,stdout,stderr,terminal-*` | `WasiCliContext` | `wasmtimejavang-wasi-cli` | ✅ | `withEnvs(Map)`, `withArguments(List)`, `withStdIn/StdOut/StdErr(...)`. `terminal-*` always reports "not a tty" |
+| `wasi:clocks/monotonic-clock,wall-clock` | `WasiClocksContext` | `wasmtimejavang-wasi-clocks` | ✅ | none (uses `System.nanoTime()`/`System.currentTimeMillis()`) |
+| `wasi:random/random,insecure,insecure-seed` | `WasiRandomContext` | `wasmtimejavang-wasi-random` | ✅ | `withSecureRandom(Random)`, `withRandom(Random)` (the insecure generator) |
+| `wasi:io/poll,streams,error` | `WasiIoContext` | `wasmtimejavang-wasi-io` | ✅ | Owns the shared stream/pollable tables other contexts (`WasiCliContext`, `WasiClocksContext`, `WasiFilesystemContext`, `WasiSocketsContext`, `WasiHttpContext`) depend on. Both blocking and non-blocking reads/skips are implemented (`[method]input-stream.{blocking-,}read`/`{blocking-,}skip`, the batch `poll` function, `[method]pollable.ready`) |
+| `wasi:filesystem/types,preopens` | `WasiFilesystemContext` | `wasmtimejavang-wasi-filesystem` | ✅ | `withDirectory(Path host, String client)` (repeatable). No symlink support by design: `symlink-at`/`readlink-at` report `unsupported`, and `path-flags.symlink-follow` is ignored — host paths always resolve following symlinks |
+| `wasi:sockets/network,instance-network,tcp(-create-socket),udp(-create-socket),ip-name-lookup` | `WasiSocketsContext` | `wasmtimejavang-wasi-sockets` | ✅ | None — a guest creates/binds/connects/listens its own sockets, same as on a real host. IPv4 only (`ipv6` rejected as `not-supported`, `[method]{tcp,udp}-socket.address-family` always reports `ipv4`). Some options `java.net` has no equivalent for (TCP `hop-limit`, TCP keep-alive idle-time/interval/count, UDP `unicast-hop-limit`) are stored and returned as configured but not actually applied to the OS socket |
+| `wasi:http/types,outgoing-handler` | `WasiHttpContext` | `wasmtimejavang-wasi-http` | 🟡 | None — a guest makes outgoing HTTP calls (`fetch()`-style) via a real, blocking `java.net.http.HttpClient` call. `request-options#between-bytes-timeout` has no `HttpClient` equivalent (stored but not applied). `wasi:http/incoming-handler` (a guest *exporting* a request handler, for reverse-proxy-style hosting) isn't implemented yet |
 
 `WasiFilesystemContext` mirrors WASI Preview 1's filesystem support (`WasiPI1Context` + `withDirectory`): preopened host directories are exposed as `descriptor` resources sandboxed the same way -- a guest path can never resolve outside its preopened directory, no matter how many `..` segments it contains. Reads/writes go through `wasi:io/streams` the same way `wasi:cli/stdout` does: `[method]descriptor.read-via-stream`/`write-via-stream`/`append-via-stream` hand out `input-stream`/`output-stream` resources from the shared `wasi-io` table (so it depends on `"wasi-io"` the same way `WasiCliContext` and `WasiClocksContext` do), rather than reading/writing bytes directly.
 
@@ -318,7 +332,7 @@ linker.linkRequired(component); // pulls in wasi-io, wasi-clocks, wasi-random
 
 This is the mechanism that matters most for actually using this library: WASI is just the *built-in* set of `WasmComponentContext` implementations, and any Java application can define its own to expose custom host functionality — database access, business logic, whatever — to a component's imports, the exact same way. There are two ways to implement one: hand-write it directly against `WasmComponentContext` (full control, shown first below), or generate a typed interface from a WIT file via `wit-codegen-maven-plugin` and implement just the typed methods (less boilerplate — no manual version-string wiring or `Object[]` casts). Both are shown below using the same example (its full source is in the repo and covered by `WasmtimeCustomComponentTest`, so it's guaranteed to stay in sync with the code, not just aspirational documentation).
 
-**1. Define the interface in WIT.** This is the contract the guest and the host agree on — a Java-side `WasmComponentContext` needs no WIT file itself (it's built against the fully dynamic `component::Val` API), but the *component being compiled* does, since Rust needs it to generate typed bindings. [`src/test/rust/wasip2customtest/wit/world.wit`](src/test/rust/wasip2customtest/wit/world.wit):
+**1. Define the interface in WIT.** This is the contract the guest and the host agree on — a Java-side `WasmComponentContext` needs no WIT file itself (it's built against the fully dynamic `component::Val` API), but the *component being compiled* does, since Rust needs it to generate typed bindings. [`wasmtimejavang-wasi-cli/src/test/rust/wasip2customtest/wit/world.wit`](wasmtimejavang-wasi-cli/src/test/rust/wasip2customtest/wit/world.wit):
 
 ```wit
 package my:custom@1.0.0;
@@ -333,7 +347,7 @@ world custom-world {
 }
 ```
 
-**2. Consume it from the guest.** Any language with Component Model tooling works; the test fixture is Rust using [`wit-bindgen`](https://github.com/bytecodealliance/wit-bindgen) (the only test fixture in this repo that needs it — every WASI-only fixture relies solely on `wasm32-wasip2`'s built-in componentization). [`src/test/rust/wasip2customtest/src/main.rs`](src/test/rust/wasip2customtest/src/main.rs):
+**2. Consume it from the guest.** Any language with Component Model tooling works; the test fixture is Rust using [`wit-bindgen`](https://github.com/bytecodealliance/wit-bindgen) (one of two test fixtures in this repo that need it, alongside `wasi:http`'s — every WASI-only fixture otherwise relies solely on `wasm32-wasip2`'s built-in componentization). [`wasmtimejavang-wasi-cli/src/test/rust/wasip2customtest/src/main.rs`](wasmtimejavang-wasi-cli/src/test/rust/wasip2customtest/src/main.rs):
 
 ```rust
 wit_bindgen::generate!({
@@ -354,7 +368,7 @@ fn main() {
 
 **3. Implement it in Java.** Two ways — hand-write it directly against `WasmComponentContext`, or generate a typed interface from the same WIT file and implement that instead.
 
-**Hand-written**, to provide `hello`/`add` directly. [`GreetComponentContext`](src/test/java/io/github/stefanrichterhuber/wasmtimejavang/GreetComponentContext.java):
+**Hand-written**, to provide `hello`/`add` directly. [`GreetComponentContext`](wasmtimejavang-wasi-cli/src/test/java/io/github/stefanrichterhuber/wasmtimejavang/GreetComponentContext.java):
 
 ```java
 public class GreetComponentContext implements WasmComponentContext {
@@ -462,9 +476,9 @@ public class MyBundledContext implements FooContext, BarContext {
 }
 ```
 
-**Note:** this project's own generated interfaces (`wasmtimejavang/src/main/java/.../wasip2/generated/`) can't be wired into `wasmtimejavang`'s own build this way — that would be a circular module dependency within this repository's reactor — so they're regenerated by hand when the WIT source changes rather than on every build. Your project, depending on `wasmtimejavang` as an ordinary library, doesn't have that constraint. `wit-parser`, a JNI binding around the [`wit-parser`](https://crates.io/crates/wit-parser) Rust crate, handles the actual WIT parsing behind the plugin.
+**Note:** the plugin can't be wired into `wasmtimejavang` (the core artifact) itself this way — that would be a circular module dependency within this repository's reactor, since the plugin's own tests depend on core. Every one of this repository's own WASI Preview 2 artifacts (`wasmtimejavang-wasi-io`, `-wasi-clocks`, `-wasi-random`, `-wasi-cli`, `-wasi-filesystem`, `-wasi-sockets`, `-wasi-http`) demonstrates the pattern instead: a *separate* artifact depending on core, using the plugin as a normal `generate-sources` build step (see e.g. [`wasmtimejavang-wasi-http/pom.xml`](wasmtimejavang-wasi-http/pom.xml)). Your own project, depending on any of these artifacts as an ordinary library, never has this constraint. `wit-parser`, a JNI binding around the [`wit-parser`](https://crates.io/crates/wit-parser) Rust crate, handles the actual WIT parsing behind the plugin.
 
-**4. Link it and run.** (identical either way — only the implementing class differs). [`WasmtimeCustomComponentTest`](src/test/java/io/github/stefanrichterhuber/wasmtimejavang/WasmtimeCustomComponentTest.java):
+**4. Link it and run.** (identical either way — only the implementing class differs). [`WasmtimeCustomComponentTest`](wasmtimejavang-wasi-cli/src/test/java/io/github/stefanrichterhuber/wasmtimejavang/WasmtimeCustomComponentTest.java):
 
 ```java
 try (FileInputStream fis = new FileInputStream(wasmPath);
@@ -527,13 +541,19 @@ Every `WasmComponentContext` tracks a `SemanticVersion` (`withVersion`/`getVersi
 
 ## Architecture
 
-`wasmtimejavang` (see [Project Structure](#project-structure) above for the other two modules) is structured into three distinct layers:
+`wasmtimejavang` (the core artifact — see [Project Structure](#project-structure) above for the other modules) is structured into three distinct layers:
 
-1. **Java API**: A type-safe wrapper that represents Wasmtime concepts (Engine, Module, Store, Instance) in Java. It uses `jar-jni` for automatic native library loading. Log4j2 is used as logging framework.
+1. **Java API**: A type-safe wrapper that represents Wasmtime concepts (Engine, Module, Store, Instance) in Java. It uses `jar-jni` for automatic native library loading. Log4j2 is used as logging framework. All called external functions (wasm32-wasip1) or components (wasm32-wasip2) are written in Java with a configurable dependency injection so that any function could be modified or rewritten by a java developer without knowledge about wasm.
 2. **JNI Layer (Rust)**: Built using the [jni-rs](https://crates.io/crates/jni) crate. It manages the lifecycle of native Wasmtime objects and facilitates data exchange between the JVM and Rust. This layer also redirects Rust `log` crate output to Java's Log4j2. "Classic" Java JNI was preferred over the newer "Foreign Function and Memory API", due to the native library is only planned to be used with Java so it could be tailored to its use. This allows more direct Rust - Java interactions like easily calling Java methods on objects or even create new Java objects using their constructor. A "Foreign Function an Memory API" approach would have resulted in a thinner native layer with far higher implementation effort on the Java side for all the type conversion, especially sacrificing the type and lifetime safety the current rust layer provides for the runtime.
 3. **Wasmtime Core**: The underlying [wasmtime](https://crates.io/crates/wasmtime) Rust crate.
 
-All modules are tested using JUnit. Test coverage is measured with Jacoco. The neccessary wasm modules for testing are build with rust (see `src/test/rust`). Using `exec-maven-plugin` these wasm modules are build in the `generate-test-resources` phase.
+All modules are tested using JUnit. Test coverage is measured with Jacoco. The neccessary wasm modules for testing are build with rust (see each module's own `src/test/rust`, where present). Using `exec-maven-plugin` these wasm modules are build in the `generate-test-resources` phase.
+
+## Breaking changes
+
+* **Version 6.x.x**: Splitting the project into separate modules — three at first (`wasmtimejavang`, `wit-parser`, `wit-codegen-maven-plugin`), now further split so every WASI Preview 2 world ships as its own artifact depending on a `wasmtimejavang` core (`wasmtimejavang-wasi-{io,clocks,random,cli,filesystem,sockets,http}` — see [Project Structure](#project-structure)); Introduction of the wit-parser to automatically generate bindings for wasm32-wasip2; No changes for wasm32-wasip1 support
+* **Version 5.x.x**: Introduction of wasm32-wasip2 support; No changes for wasm32-wasip1 support
+* **Version 4.x.x**: Changed signature of Wasmfunction
 
 ## Comparison to Previous Work
 

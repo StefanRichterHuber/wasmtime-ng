@@ -1,4 +1,4 @@
-package io.github.stefanrichterhuber.wasmtimejavang.wasip2;
+package io.github.stefanrichterhuber.wasmtimejavang.wasip2wasicli;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -31,6 +31,8 @@ import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.Term
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TerminalStderrContext;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TerminalStdinContext;
 import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasicli.TerminalStdoutContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
 
 /**
  * Implementation of the {@code wasi:cli/*} interfaces (WASI Preview 2,

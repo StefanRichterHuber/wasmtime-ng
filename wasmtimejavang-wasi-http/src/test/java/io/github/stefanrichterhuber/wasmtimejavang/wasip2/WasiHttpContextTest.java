@@ -27,6 +27,8 @@ import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResult;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitVariant;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2http.WasiHttpContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
 
 /**
  * Direct unit tests for {@link WasiHttpContext}, wiring its {@code "wasi-io"}
@@ -204,7 +206,10 @@ public class WasiHttpContextTest {
         return request;
     }
 
-    /** Drives {@code handle} + {@code future-incoming-response.get}, returning the inner (network-level) result. */
+    /**
+     * Drives {@code handle} + {@code future-incoming-response.get}, returning the
+     * inner (network-level) result.
+     */
     private WitResult handleAndAwait(WasiHttpContext http, WitResource request) {
         WitResult handleResult = http.outgoingHandlerHandle(null, request, Optional.empty());
         assertTrue(handleResult.ok(), "handle failed: " + handleResult.value());

@@ -17,6 +17,8 @@ import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext.ComponentImportFunction;
 import io.github.stefanrichterhuber.wasmtimejavang.WasmComponentContext.ComponentImportResource;
 import io.github.stefanrichterhuber.wasmtimejavang.component.WitResource;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiclocks.WasiClocksContext;
+import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoContext;
 
 /**
  * Direct unit tests for {@link WasiClocksContext}, wiring its {@code "wasi-io"}
