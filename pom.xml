@@ -32,6 +32,13 @@
         <module>wasmtimejavang</module>
         <module>wit-parser</module>
         <module>wit-codegen-maven-plugin</module>
+        <module>wasmtimejavang-wasi-io</module>
+        <module>wasmtimejavang-wasi-clocks</module>
+        <module>wasmtimejavang-wasi-random</module>
+        <module>wasmtimejavang-wasi-cli</module>
+        <module>wasmtimejavang-wasi-filesystem</module>
+        <module>wasmtimejavang-wasi-sockets</module>
+        <module>wasmtimejavang-wasi-http</module>
     </modules>
 
     <properties>

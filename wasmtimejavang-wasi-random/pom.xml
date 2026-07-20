@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.stefanrichterhuber</groupId>
+        <artifactId>wasmtimejavang-parent</artifactId>
+        <version>5.0.1-SNAPSHOT</version>
+        <relativePath>..</relativePath>
+    </parent>
+
+    <artifactId>wasmtimejavang-wasi-random</artifactId>
+
+    <name>wasmtime-java-ng :: wasi-random</name>
+    <description>WASI Preview 2 wasi:random/random,insecure,insecure-seed (Component Model) support for wasmtime-java-ng.</description>
+    <url>https://github.com/StefanRichterHuber/wasmtime-java-ng</url>
+
+    <properties>
+        <witCodegen.targetPackage>io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasirandom</witCodegen.targetPackage>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.stefanrichterhuber</groupId>
+            <artifactId>wasmtimejavang</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Only needed by WasmtimeWasiRandomTest for wasi-cli stdout capture. -->
+        <dependency>
+            <groupId>io.github.stefanrichterhuber</groupId>
+            <artifactId>wasmtimejavang-wasi-cli</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.github.stefanrichterhuber</groupId>
+                <artifactId>wit-codegen-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate-wasi-random-sources</id>
+                        <goals>
+                            <goal>generate-wit-sources</goal>
+                        </goals>
+                        <configuration>
+                            <worldSourceDirectory>${project.basedir}/src/main/wit/wasi-random</worldSourceDirectory>
+                            <worldName>imports</worldName>
+                            <targetPackage>${witCodegen.targetPackage}</targetPackage>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <executions>
+                    <execution>
+                        <id>build wasm test wasip2randomtest</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>generate-test-resources</phase>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <workingDirectory>${project.basedir}/src/test/rust/wasip2randomtest</workingDirectory>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--profile</argument>
+                                <!-- Always use dev profile for faster build: its just a test -->
+                                <argument>dev</argument>
+                                <argument>--target</argument>
+                                <argument>wasm32-wasip2</argument>
+                                <argument>--target-dir</argument>
+                                <argument>${project.build.directory}/rust-test/wasip2randomtest</argument>
+                            </arguments>
+                            <environmentVariables>
+                                <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                            </environmentVariables>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
