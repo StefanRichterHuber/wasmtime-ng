@@ -1,0 +1,17 @@
+[package]
+name = "wit-parser-binding"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "witparserbinding"
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-parser = { version = "0.253" }
+jni = { version = "0.22" }
+log = { version = "0.4", features = ["std"] }
+anyhow = { version = "1.0" }
+
+[dev-dependencies]
+jni = { version = "0.22", features = ["invocation"] }
