@@ -49,10 +49,7 @@ import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
  * {@code udp} and {@code ip-name-lookup} (WASI Preview 2, 0.2.6) -- the
  * {@code "wasi-sockets"} component context.
  * <br>
- * Implements all seven generated interfaces at once (see
- * {@link WasiRandomContext} for why this works and how
- * {@code getImportFunctions()}/{@code getImportResources()}/
- * {@code getProvidedInterfaces()} get combined).
+ * Implements all seven generated interfaces at once.
  * <br>
  * Unlike WASI Preview 1's socket support ({@code SocketWasiFileDescriptor}/
  * {@code ServerSocketWasiFileDescriptor}, which only ever wrap a socket the

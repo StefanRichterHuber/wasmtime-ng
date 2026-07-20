@@ -21,9 +21,7 @@ import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
  * {@code wasi:clocks/wall-clock} (WASI Preview 2, 0.2.6) -- the
  * {@code "wasi-clocks"} component context.
  * <br>
- * Implements both generated interfaces at once (see {@link WasiRandomContext}
- * for why this works and how {@code getImportFunctions()}/
- * {@code getImportResources()}/{@code getProvidedInterfaces()} get combined).
+ * Implements both generated interfaces at once.
  * <br>
  * Depends on {@code "wasi-io"} ({@link WasiIoResources}) because the
  * {@code pollable} resource monotonic-clock's {@code subscribe-instant}/

@@ -29,10 +29,7 @@ import io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasiio.Strea
  * {@code wasi:io/error} (WASI Preview 2, 0.2.6) -- the {@code "wasi-io"}
  * component context.
  * <br>
- * Implements all three generated interfaces at once (see
- * {@link WasiRandomContext} for why this works and how
- * {@code getImportFunctions()}/{@code getImportResources()}/
- * {@code getProvidedInterfaces()} get combined).
+ * Implements all three generated interfaces at once.
  * <br>
  * Owns the actual stream/pollable tables, exposed via {@link WasiIoResources}
  * so contexts implementing other interfaces that hand out these same

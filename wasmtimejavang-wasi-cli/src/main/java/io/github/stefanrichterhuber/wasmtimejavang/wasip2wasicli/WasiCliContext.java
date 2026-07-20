@@ -39,10 +39,7 @@ import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
  * 0.2.6): environment, exit, stdio, and terminal-* stubs -- the
  * {@code "wasi-cli"} component context.
  * <br>
- * Implements all ten generated interfaces at once (see
- * {@link WasiRandomContext} for why this works and how
- * {@code getImportFunctions()}/{@code getImportResources()}/
- * {@code getProvidedInterfaces()} get combined).
+ * Implements all ten generated interfaces at once.
  * <br>
  * Depends on {@code "wasi-io"} ({@link WasiIoResources}) to actually register
  * the {@code input-stream}/{@code output-stream} resources

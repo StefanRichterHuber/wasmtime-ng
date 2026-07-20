@@ -48,9 +48,7 @@ import io.github.stefanrichterhuber.wasmtimejavang.wasip2wasiio.WasiIoResources;
  * {@code wasi:filesystem/preopens} (WASI Preview 2, 0.2.6) -- the
  * {@code "wasi-filesystem"} component context.
  * <br>
- * Implements both generated interfaces at once (see {@link WasiRandomContext}
- * for why this works and how {@code getImportFunctions()}/
- * {@code getImportResources()}/{@code getProvidedInterfaces()} get combined).
+ * Implements both generated interfaces at once.
  * <br>
  * Structured like the WASI Preview 1 filesystem support
  * ({@code io.github.stefanrichterhuber.wasmtimejavang.WasiPI1Context} +
