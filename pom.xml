@@ -5,7 +5,7 @@
 
     <groupId>io.github.stefanrichterhuber</groupId>
     <artifactId>wasmtimejavang-parent</artifactId>
-    <version>6.0.3-SNAPSHOT</version>
+    <version>6.0.3</version>
     <packaging>pom</packaging>
 
     <name>wasmtime-java-ng (parent)</name>
@@ -65,7 +65,7 @@
         <connection>scm:git:https://github.com/StefanRichterHuber/wasmtime-ng</connection>
         <developerConnection>scm:git:https://github.com/StefanRichterHuber/wasmtime-ng</developerConnection>
         <url>https://github.com/StefanRichterHuber/wasmtime-ng</url>
-        <tag>v4.0.1</tag>
+        <tag>v6.0.3</tag>
     </scm>
 
     <distributionManagement>
