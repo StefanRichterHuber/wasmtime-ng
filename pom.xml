@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.stefanrichterhuber</groupId>
@@ -47,7 +49,10 @@
         <maven.compiler.target>21</maven.compiler.target>
         <maven.compiler.release>21</maven.compiler.release>
 
-        <log4j.version>2.25.4</log4j.version>
+        <log4j.version>2.26.1</log4j.version>
+        <junit-jupiter.version>6.1.3</junit-jupiter.version>
+        <jimfs.version>1.3.2</jimfs.version>
+        <mockito.version>5.24.0</mockito.version>
 
         <!-- Cargo profile for development. Change to 'release' for release builds -->
         <cargo.profile>dev</cargo.profile>

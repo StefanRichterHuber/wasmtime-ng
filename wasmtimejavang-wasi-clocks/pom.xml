@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
@@ -17,7 +19,8 @@
     <url>https://github.com/StefanRichterHuber/wasmtime-java-ng</url>
 
     <properties>
-        <witCodegen.targetPackage>io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasiclocks</witCodegen.targetPackage>
+        <witCodegen.targetPackage>
+            io.github.stefanrichterhuber.wasmtimejavang.wasip2.generated.wasiclocks</witCodegen.targetPackage>
     </properties>
 
     <dependencies>
@@ -34,7 +37,7 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
-            <version>5.10.2</version>
+            <version>${junit-jupiter.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
