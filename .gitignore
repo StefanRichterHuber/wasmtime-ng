@@ -4,3 +4,4 @@ GEMINI.md
 .settings/
 .classpath
 .project
+release.sh
