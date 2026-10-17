@@ -44,73 +44,239 @@
                     </compilerArgs>
                 </configuration>
             </plugin>
-
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>3.2.0</version>
-                <executions>
-                    <!-- Unlike wasmtime-binding (which ships to every consumer's runtime and
-                    needs cross-compiled binaries for the full release platform matrix), this
-                    binding only ever runs on the build machine during `generate-sources` of the
-                    wit-codegen-maven-plugin, so a plain host-target `cargo build` is enough,
-                    no `cross`/Docker required. -->
-                    <execution>
-                        <id>build wit-parser-binding</id>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <phase>compile</phase>
-                        <configuration>
-                            <executable>cargo</executable>
-                            <workingDirectory>
-                                ${project.basedir}/src/main/rust/wit-parser-binding</workingDirectory>
-                            <arguments>
-                                <argument>build</argument>
-                                <argument>--profile</argument>
-                                <argument>${cargo.profile}</argument>
-                                <argument>--target-dir</argument>
-                                <argument>${project.build.directory}/rust</argument>
-                            </arguments>
-                            <environmentVariables>
-                                <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
-                            </environmentVariables>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <plugin>
-                <artifactId>maven-resources-plugin</artifactId>
-                <version>3.3.1</version>
-                <executions>
-                    <!-- Copy the library built above to the libs folder within the classes, in a
-                    folder matching the JNA convention jar-jni uses to find the suitable library
-                    for a target. Only linux-x86-64 (the build machine's own platform) is covered
-                    for now, see the module description. -->
-                    <execution>
-                        <id>copy-lib-linux-x86-64</id>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>copy-resources</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>
-                                ${project.build.directory}/classes/io/github/stefanrichterhuber/witparser/libs/linux-x86-64</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <directory>
-                                        ${project.build.directory}/rust/${cargo.profile.folder}</directory>
-                                    <filtering>false</filtering>
-                                    <includes>
-                                        <include>*.so</include>
-                                    </includes>
-                                </resource>
-                            </resources>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
+
+    <!-- Profiles -->
+    <!-- This binding only runs on the build machine (during `generate-sources` of the
+    wit-codegen-maven-plugin), but that build machine can be any platform consumers build on, so
+    it is cross-compiled for the same platform matrix as wasmtime-binding. -->
+    <profiles>
+        <!-- Build linux x86 64 bit version of wit-parser-binding native rust library, active by
+        default -->
+        <profile>
+            <id>build-linux-x86-64</id>
+            <activation>
+                <property>
+                    <name>build-linux-x86-64</name>
+                    <value>true</value>
+                </property>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.2.0</version>
+                        <executions>
+                            <execution>
+                                <id>build linux x86 64 bit</id>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <phase>compile</phase>
+                                <configuration>
+                                    <executable>cross</executable>
+                                    <workingDirectory>
+                                        ${project.basedir}/src/main/rust/wit-parser-binding</workingDirectory>
+                                    <arguments>
+                                        <argument>build</argument>
+                                        <argument>--profile</argument>
+                                        <argument>${cargo.profile}</argument>
+                                        <argument>--target</argument>
+                                        <argument>x86_64-unknown-linux-gnu</argument>
+                                        <argument>--target-dir</argument>
+                                        <argument>${project.build.directory}/rust</argument>
+                                    </arguments>
+                                    <environmentVariables>
+                                        <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                                    </environmentVariables>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <!-- Copy the libraries build to the libs folder within the classes, in
+                            a folder matching the JNA convention jar-jni uses to find the suitable
+                            library for a target -->
+                            <execution>
+                                <id>copy-lib-linux-x86-64</id>
+                                <phase>compile</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>
+                                        ${project.build.directory}/classes/io/github/stefanrichterhuber/witparser/libs/linux-x86-64</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>
+                                                ${project.build.directory}/rust/x86_64-unknown-linux-gnu/${cargo.profile.folder}</directory>
+                                            <filtering>false</filtering>
+                                            <includes>
+                                                <include>*.so</include>
+                                            </includes>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Build linux aarch64 bit version of wit-parser-binding native rust library -->
+        <profile>
+            <id>build-linux-aarch64</id>
+            <activation>
+                <property>
+                    <name>build-linux-aarch64</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.2.0</version>
+                        <executions>
+                            <execution>
+                                <id>build linux ARM64 bit</id>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <phase>compile</phase>
+                                <configuration>
+                                    <executable>cross</executable>
+                                    <workingDirectory>
+                                        ${project.basedir}/src/main/rust/wit-parser-binding</workingDirectory>
+                                    <arguments>
+                                        <argument>build</argument>
+                                        <argument>--profile</argument>
+                                        <argument>${cargo.profile}</argument>
+                                        <argument>--target</argument>
+                                        <argument>aarch64-unknown-linux-gnu</argument>
+                                        <argument>--target-dir</argument>
+                                        <argument>${project.build.directory}/rust</argument>
+                                    </arguments>
+                                    <environmentVariables>
+                                        <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                                    </environmentVariables>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <execution>
+                                <id>copy-lib-linux-aarch64</id>
+                                <phase>compile</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>
+                                        ${project.build.directory}/classes/io/github/stefanrichterhuber/witparser/libs/linux-aarch64</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>
+                                                ${project.build.directory}/rust/aarch64-unknown-linux-gnu/${cargo.profile.folder}</directory>
+                                            <filtering>false</filtering>
+                                            <includes>
+                                                <include>*.so</include>
+                                            </includes>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Build windows x86 64 bit version of wit-parser-binding native rust library -->
+        <profile>
+            <id>build-windows-x86_64</id>
+            <activation>
+                <property>
+                    <name>build-windows-x86_64</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.2.0</version>
+                        <executions>
+                            <execution>
+                                <id>build windows x86 64 bit</id>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <phase>compile</phase>
+                                <configuration>
+                                    <executable>cross</executable>
+                                    <workingDirectory>
+                                        ${project.basedir}/src/main/rust/wit-parser-binding</workingDirectory>
+                                    <arguments>
+                                        <argument>build</argument>
+                                        <argument>--profile</argument>
+                                        <argument>${cargo.profile}</argument>
+                                        <argument>--target</argument>
+                                        <argument>x86_64-pc-windows-gnu</argument>
+                                        <argument>--target-dir</argument>
+                                        <argument>${project.build.directory}/rust</argument>
+                                    </arguments>
+                                    <environmentVariables>
+                                        <RUSTUP_TOOLCHAIN>stable</RUSTUP_TOOLCHAIN>
+                                    </environmentVariables>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <execution>
+                                <id>copy-lib-win64</id>
+                                <phase>compile</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>
+                                        ${project.build.directory}/classes/io/github/stefanrichterhuber/witparser/libs/win32-x86-64</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>
+                                                ${project.build.directory}/rust/x86_64-pc-windows-gnu/${cargo.profile.folder}</directory>
+                                            <filtering>false</filtering>
+                                            <includes>
+                                                <include>*.dll</include>
+                                            </includes>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
