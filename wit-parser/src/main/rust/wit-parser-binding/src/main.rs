@@ -1,62 +1,39 @@
+//! WASI command wrapping the Rust `wit-parser` crate, run by `WitParser` (Java side) on
+//! wasmtimejavang. Compiled to `wasm32-wasip1`, so a single module serves every platform.
+//!
+//! Usage (paths are guest paths within the preopened WIT directory):
+//!   wit-parser file <path>                 every named interface at <path>
+//!   wit-parser world <dir> <world-name>    the interfaces imported by world <world-name>
+//!
+//! On success the resolved interfaces are written to stdout as JSON; on failure the error is
+//! written to stderr and the process exits with code 1.
+
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::Path;
 
-use jni::bind_java_type;
-use jni::jni_str;
-use jni::objects::{JClass, JObject, JObjectArray, JString};
-use jni::strings::JNIString;
-use jni::sys::jsize;
-use log::debug;
+use serde::Serialize;
 use wit_parser::{Handle, Interface, Resolve, Type, TypeDefKind, TypeId, WorldItem};
 
-bind_java_type! {
-    rust_type = pub JWitParam,
-    java_type = "io.github.stefanrichterhuber.witparser.WitParam",
-
-    constructors {
-        fn new(name: JString, type_tag: JString, resource_name: JString),
-    },
-}
-
-bind_java_type! {
-    rust_type = pub JWitFunction,
-    java_type = "io.github.stefanrichterhuber.witparser.WitFunction",
-
-    constructors {
-        fn new(name: JString, params: JObject[], result_tag: JString, result_resource_name: JString),
-    },
-}
-
-bind_java_type! {
-    rust_type = pub JWitInterface,
-    java_type = "io.github.stefanrichterhuber.witparser.WitInterface",
-
-    constructors {
-        fn new(name: JString, functions: JObject[], resources: JObject[]),
-    },
-}
-
-bind_java_type! {
-    rust_type = pub JWitParser,
-    java_type = "io.github.stefanrichterhuber.witparser.WitParser",
-
-    native_methods {
-        extern static fn parse_wit_file(path: JString) -> JObject[],
-        extern static fn parse_wit_world(directory: JString, world_name: JString) -> JObject[],
-    },
-}
-
+#[derive(Serialize)]
 struct ParsedParam {
     name: String,
     type_tag: String,
     resource_name: Option<String>,
 }
 
+#[derive(Serialize)]
+struct ParsedResult {
+    type_tag: String,
+    /// Populated only if `type_tag` is "resource"
+    resource_name: Option<String>,
+}
+
+#[derive(Serialize)]
 struct ParsedFunction {
     name: String,
     params: Vec<ParsedParam>,
-    /// (WIT type tag, resource name if the tag is "resource")
-    result: Option<(String, Option<String>)>,
+    result: Option<ParsedResult>,
 }
 
 /// A WIT interface resolved from a `.wit` file/directory or a world, with its
@@ -64,6 +41,7 @@ struct ParsedFunction {
 /// type it defines *or* merely references via a handle (own/borrow) in a
 /// function signature, covering both resources with zero methods and foreign
 /// resources only ever borrowed (see `build_interface`).
+#[derive(Serialize)]
 struct ParsedInterface {
     name: String,
     functions: Vec<ParsedFunction>,
@@ -250,7 +228,10 @@ fn build_interface(resolve: &Resolve, interface: &Interface) -> anyhow::Result<P
         let result = match &function.result {
             Some(ty) => {
                 let (tag, resource_name) = classify(resolve, ty)?;
-                Some((tag.to_string(), resource_name))
+                Some(ParsedResult {
+                    type_tag: tag.to_string(),
+                    resource_name,
+                })
             }
             None => None,
         };
@@ -357,137 +338,27 @@ fn resolve_world_source(dir: &str, world_name: &str) -> anyhow::Result<Vec<Parse
     Ok(interfaces)
 }
 
-/// Throws a `java.lang.RuntimeException` and returns `Ok(None)` if `result`
-/// is an `Err`, otherwise returns `Ok(Some(...))`. Callers must return an
-/// empty array immediately on `None` -- the exception is already pending.
-fn throw_on_err<'local, T>(
-    env: &mut ::jni::Env<'local>,
-    result: anyhow::Result<T>,
-) -> Result<Option<T>, jni::errors::Error> {
-    match result {
-        Ok(value) => Ok(Some(value)),
+fn run(args: &[String]) -> anyhow::Result<Vec<ParsedInterface>> {
+    match args {
+        [command, path] if command == "file" => parse_wit_source(path),
+        [command, dir, world_name] if command == "world" => resolve_world_source(dir, world_name),
+        _ => anyhow::bail!(
+            "usage: wit-parser file <path> | wit-parser world <dir> <world-name>, got {args:?}"
+        ),
+    }
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match run(&args) {
+        Ok(interfaces) => {
+            let mut stdout = std::io::stdout().lock();
+            serde_json::to_writer(&mut stdout, &interfaces).expect("failed to write result");
+            stdout.flush().expect("failed to flush result");
+        }
         Err(e) => {
-            env.throw_new(
-                jni_str!("java/lang/RuntimeException"),
-                JNIString::from(e.to_string()),
-            )?;
-            Ok(None)
-        }
-    }
-}
-
-fn optional_jstring<'local>(
-    env: &mut ::jni::Env<'local>,
-    value: Option<&str>,
-) -> Result<JString<'local>, jni::errors::Error> {
-    match value {
-        Some(v) => env.new_string(v),
-        None => env.cast_local::<JString>(JObject::null()),
-    }
-}
-
-fn build_interfaces_array<'local>(
-    env: &mut ::jni::Env<'local>,
-    parsed: &[ParsedInterface],
-) -> Result<JObjectArray<'local>, jni::errors::Error> {
-    let interfaces_array = env.new_object_array(
-        parsed.len() as jsize,
-        jni_str!("io.github.stefanrichterhuber.witparser.WitInterface"),
-        JObject::null(),
-    )?;
-
-    for (i, iface) in parsed.iter().enumerate() {
-        let functions_array = env.new_object_array(
-            iface.functions.len() as jsize,
-            jni_str!("io.github.stefanrichterhuber.witparser.WitFunction"),
-            JObject::null(),
-        )?;
-
-        for (j, func) in iface.functions.iter().enumerate() {
-            let params_array = env.new_object_array(
-                func.params.len() as jsize,
-                jni_str!("io.github.stefanrichterhuber.witparser.WitParam"),
-                JObject::null(),
-            )?;
-
-            for (k, param) in func.params.iter().enumerate() {
-                let name_j = env.new_string(&param.name)?;
-                let tag_j = env.new_string(&param.type_tag)?;
-                let resource_j = optional_jstring(env, param.resource_name.as_deref())?;
-                let param_obj = JWitParam::new(env, name_j, tag_j, resource_j)?;
-                params_array.set_element(env, k, param_obj)?;
-            }
-
-            let func_name_j = env.new_string(&func.name)?;
-            let (result_tag_j, result_resource_j) = match &func.result {
-                Some((tag, resource_name)) => (
-                    env.new_string(tag)?,
-                    optional_jstring(env, resource_name.as_deref())?,
-                ),
-                None => (optional_jstring(env, None)?, optional_jstring(env, None)?),
-            };
-
-            let func_obj = JWitFunction::new(
-                env,
-                func_name_j,
-                params_array,
-                result_tag_j,
-                result_resource_j,
-            )?;
-            functions_array.set_element(env, j, func_obj)?;
-        }
-
-        let resources_array = env.new_object_array(
-            iface.resources.len() as jsize,
-            jni_str!("java.lang.String"),
-            JObject::null(),
-        )?;
-        for (k, resource_name) in iface.resources.iter().enumerate() {
-            let name_j = env.new_string(resource_name)?;
-            resources_array.set_element(env, k, name_j)?;
-        }
-
-        let iface_name_j = env.new_string(&iface.name)?;
-        let iface_obj = JWitInterface::new(env, iface_name_j, functions_array, resources_array)?;
-        interfaces_array.set_element(env, i, iface_obj)?;
-    }
-
-    Ok(interfaces_array)
-}
-
-impl JWitParserNativeInterface for JWitParserAPI {
-    type Error = jni::errors::Error;
-
-    fn parse_wit_file<'local>(
-        env: &mut ::jni::Env<'local>,
-        _class: JClass<'local>,
-        path: JString<'local>,
-    ) -> ::std::result::Result<JObjectArray<'local>, Self::Error> {
-        let path_string: String = path.to_string();
-        debug!("Parsing WIT path {path_string}");
-
-        match throw_on_err(env, parse_wit_source(&path_string))? {
-            Some(parsed) => build_interfaces_array(env, &parsed),
-            None => env.new_object_array(0, jni_str!("java.lang.Object"), JObject::null()),
-        }
-    }
-
-    fn parse_wit_world<'local>(
-        env: &mut ::jni::Env<'local>,
-        _class: JClass<'local>,
-        directory: JString<'local>,
-        world_name: JString<'local>,
-    ) -> ::std::result::Result<JObjectArray<'local>, Self::Error> {
-        let dir_string: String = directory.to_string();
-        let world_name_string: String = world_name.to_string();
-        debug!("Resolving world '{world_name_string}' in {dir_string}");
-
-        match throw_on_err(
-            env,
-            resolve_world_source(&dir_string, &world_name_string),
-        )? {
-            Some(parsed) => build_interfaces_array(env, &parsed),
-            None => env.new_object_array(0, jni_str!("java.lang.Object"), JObject::null()),
+            eprintln!("{e:#}");
+            std::process::exit(1);
         }
     }
 }

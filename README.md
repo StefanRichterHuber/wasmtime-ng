@@ -26,6 +26,7 @@ Building this project requires both Rust and Java toolchains:
 * **Java 21+** and **Maven**
 * **Rust** and **Cargo**
 * **[cross-rs](https://github.com/cross-rs/cross)** and **Docker** (required for cross-platform native builds)
+* **[wasm-opt](https://github.com/WebAssembly/binaryen)** from binaryen (required for `release` builds, which optimize the wasm module shipped within `wit-parser`; also available outside releases via the `wasm-opt` profile). Install it e.g. with `cargo install wasm-opt`.
 
 ## Building
 
@@ -476,7 +477,7 @@ public class MyBundledContext implements FooContext, BarContext {
 }
 ```
 
-**Note:** the plugin can't be wired into `wasmtimejavang` (the core artifact) itself this way — that would be a circular module dependency within this repository's reactor, since the plugin's own tests depend on core. Every one of this repository's own WASI Preview 2 artifacts (`wasmtimejavang-wasi-io`, `-wasi-clocks`, `-wasi-random`, `-wasi-cli`, `-wasi-filesystem`, `-wasi-sockets`, `-wasi-http`) demonstrates the pattern instead: a *separate* artifact depending on core, using the plugin as a normal `generate-sources` build step (see e.g. [`wasmtimejavang-wasi-http/pom.xml`](wasmtimejavang-wasi-http/pom.xml)). Your own project, depending on any of these artifacts as an ordinary library, never has this constraint. `wit-parser`, a JNI binding around the [`wit-parser`](https://crates.io/crates/wit-parser) Rust crate, handles the actual WIT parsing behind the plugin.
+**Note:** the plugin can't be wired into `wasmtimejavang` (the core artifact) itself this way — that would be a circular module dependency within this repository's reactor, since the plugin's own tests depend on core. Every one of this repository's own WASI Preview 2 artifacts (`wasmtimejavang-wasi-io`, `-wasi-clocks`, `-wasi-random`, `-wasi-cli`, `-wasi-filesystem`, `-wasi-sockets`, `-wasi-http`) demonstrates the pattern instead: a *separate* artifact depending on core, using the plugin as a normal `generate-sources` build step (see e.g. [`wasmtimejavang-wasi-http/pom.xml`](wasmtimejavang-wasi-http/pom.xml)). Your own project, depending on any of these artifacts as an ordinary library, never has this constraint. `wit-parser` handles the actual WIT parsing behind the plugin: the [`wit-parser`](https://crates.io/crates/wit-parser) Rust crate compiled to a platform independent `wasm32-wasip1` module and run on `wasmtimejavang` itself.
 
 **4. Link it and run.** (identical either way — only the implementing class differs). [`WasmtimeCustomComponentTest`](wasmtimejavang-wasi-cli/src/test/java/io/github/stefanrichterhuber/wasmtimejavang/WasmtimeCustomComponentTest.java):
 

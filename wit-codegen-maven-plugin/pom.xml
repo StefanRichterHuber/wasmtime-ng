@@ -27,6 +27,14 @@
             <artifactId>wit-parser</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Routes the log4j-api logging of wasmtimejavang (which runs wit-parser) to Maven's
+        SLF4J logging -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-to-slf4j</artifactId>
+            <version>${log4j.version}</version>
+            <scope>runtime</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.apache.maven</groupId>

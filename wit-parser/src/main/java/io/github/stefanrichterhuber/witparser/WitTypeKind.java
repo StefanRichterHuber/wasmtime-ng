@@ -46,8 +46,8 @@ public enum WitTypeKind {
     RESOURCE;
 
     /**
-     * Maps the tag string the native {@code wit-parser} binding passes across
-     * the JNI boundary to the corresponding constant.
+     * Maps the tag string the {@code wit-parser} WASI module reports to the
+     * corresponding constant.
      *
      * @param tag The tag (e.g. {@code "u32"}, {@code "record"}, {@code "resource"}).
      * @return The matching {@link WitTypeKind}.
