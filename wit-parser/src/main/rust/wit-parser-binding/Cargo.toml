@@ -8,15 +8,8 @@ opt-level = 's'     # Optimize for size
 lto = true          # Enable Link Time Optimization
 codegen-units = 1   # Allow LLVM to optimize more aggressively across the whole crate
 
-[lib]
-name = "witparserbinding"
-crate-type = ["cdylib"]
-
 [dependencies]
 wit-parser = { version = "0.262.0" }
-jni = { version = "0.22" }
-log = { version = "0.4", features = ["std"] }
 anyhow = { version = "1.0" }
-
-[dev-dependencies]
-jni = { version = "0.22", features = ["invocation"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
