@@ -112,6 +112,22 @@ jobs:
             exit 1
           fi
 
+      - name: Check signing key secret
+        # Fail early with a clear message if MAVEN_GPG_KEY does not contain the signing subkey
+        env:
+          MAVEN_GPG_KEY: ${{ secrets.MAVEN_GPG_KEY }}
+        run: |
+          home=$(mktemp -d)
+          gpg --homedir "$home" --batch --quiet --import <<<"$MAVEN_GPG_KEY" 2>/dev/null || true
+          secret_keys=$(gpg --homedir "$home" --batch --with-colons --with-subkey-fingerprints -K \
+            | awk -F: '($1=="sec"||$1=="ssb") {stub=($15=="#"); next} $1=="fpr" && !stub {print $10}')
+          gpgconf --homedir "$home" --kill gpg-agent || true
+          rm -rf "$home"
+          if ! grep -qx "$SIGNING_KEY_FINGERPRINT" <<<"$secret_keys"; then
+            echo "::error::MAVEN_GPG_KEY does not contain the secret subkey $SIGNING_KEY_FINGERPRINT (found: ${secret_keys:-none}). Re-export it with scripts/export-ci-signing-subkey.sh"
+            exit 1
+          fi
+
       - name: Set release version
         env:
           VERSION: ${{ steps.versions.outputs.release }}
