@@ -7,14 +7,13 @@ edition = "2024"
 opt-level = 's'     # Optimize for size
 lto = true          # Enable Link Time Optimization
 codegen-units = 1   # Allow LLVM to optimize more aggressively across the whole crate
-panic = 'abort'     # Removes stack unwinding code (saves a lot of space)
 
 [lib]
 name = "wasmtimebinding"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasmtime = { version = "49.0.2" }
+wasmtime = { version = "49.0.3" }
 jni = { version = "0.22" }
 log = { version = "0.4.34", features = ["std"] }
 

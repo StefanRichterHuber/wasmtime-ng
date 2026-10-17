@@ -3,12 +3,17 @@ name = "wit-parser-binding"
 version = "0.1.0"
 edition = "2024"
 
+[profile.release]
+opt-level = 's'     # Optimize for size
+lto = true          # Enable Link Time Optimization
+codegen-units = 1   # Allow LLVM to optimize more aggressively across the whole crate
+
 [lib]
 name = "witparserbinding"
 crate-type = ["cdylib"]
 
 [dependencies]
-wit-parser = { version = "0.253" }
+wit-parser = { version = "0.262.0" }
 jni = { version = "0.22" }
 log = { version = "0.4", features = ["std"] }
 anyhow = { version = "1.0" }
