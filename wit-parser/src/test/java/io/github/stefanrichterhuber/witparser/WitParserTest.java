@@ -103,6 +103,31 @@ class WitParserTest {
     }
 
     /**
+     * {@code wasi:cli/exit.exit-with-code} is gated behind
+     * {@code @unstable(feature = cli-exit-with-code)}: dropped by default,
+     * kept once that feature is enabled.
+     */
+    @Test
+    void enablesUnstableFeatures() throws URISyntaxException {
+        Path wasiCliWitDir = wasiCliWitDirectory();
+
+        assertEquals(List.of("exit"), exitFunctionNames(WitParser.resolveWorld(wasiCliWitDir, "command")));
+
+        List<WitInterface> withFeature = WitParser.resolveWorld(wasiCliWitDir, "command",
+                List.of("cli-exit-with-code"));
+        assertEquals(List.of("exit", "exit-with-code"), exitFunctionNames(withFeature));
+        WitFunction exitWithCode = withFeature.stream().filter(i -> i.name().equals("wasi:cli/exit"))
+                .findFirst().orElseThrow().functions().get(1);
+        assertEquals(List.of(new WitParam("status-code", type(WitTypeKind.U8))), exitWithCode.params());
+        assertEquals(Optional.empty(), exitWithCode.result());
+    }
+
+    private static List<String> exitFunctionNames(List<WitInterface> interfaces) {
+        return interfaces.stream().filter(i -> i.name().equals("wasi:cli/exit")).findFirst().orElseThrow()
+                .functions().stream().map(WitFunction::name).toList();
+    }
+
+    /**
      * Resolves the standalone {@code wasi:sockets@0.2.8} package's own
      * "imports" world -- a package that depends on {@code deps/clocks} and
      * {@code deps/io}, and whose own world is named "imports", exactly like

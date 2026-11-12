@@ -76,6 +76,14 @@ public class GenerateWitSourcesMojo extends AbstractMojo {
     @Parameter(required = true, property = "witCodegen.targetPackage")
     private String targetPackage;
 
+    /**
+     * Unstable WIT features (as in {@code @unstable(feature = <name>)}) to
+     * enable, for both generation modes. Items gated behind any feature not
+     * listed here are skipped, as if they were never declared.
+     */
+    @Parameter
+    private List<String> features = List.of();
+
     @Override
     public void execute() throws MojoExecutionException {
         boolean generatedAnything = false;
@@ -86,7 +94,7 @@ public class GenerateWitSourcesMojo extends AbstractMojo {
                 for (File witFile : Arrays.stream(witFiles).sorted().toList()) {
                     List<WitInterface> interfaces;
                     try {
-                        interfaces = WitParser.parse(witFile.toPath());
+                        interfaces = WitParser.parse(witFile.toPath(), features);
                     } catch (RuntimeException e) {
                         throw new MojoExecutionException("Failed to parse " + witFile, e);
                     }
@@ -103,7 +111,7 @@ public class GenerateWitSourcesMojo extends AbstractMojo {
         if (worldSourceDirectory != null && worldName != null) {
             List<WitInterface> interfaces;
             try {
-                interfaces = WitParser.resolveWorld(worldSourceDirectory.toPath(), worldName);
+                interfaces = WitParser.resolveWorld(worldSourceDirectory.toPath(), worldName, features);
             } catch (RuntimeException e) {
                 throw new MojoExecutionException(
                         "Failed to resolve world \"" + worldName + "\" in " + worldSourceDirectory, e);
@@ -161,6 +169,10 @@ public class GenerateWitSourcesMojo extends AbstractMojo {
 
     void setTargetPackage(String targetPackage) {
         this.targetPackage = Objects.requireNonNull(targetPackage);
+    }
+
+    void setFeatures(List<String> features) {
+        this.features = List.copyOf(features);
     }
 
     void setProject(MavenProject project) {

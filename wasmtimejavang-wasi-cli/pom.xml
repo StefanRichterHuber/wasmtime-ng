@@ -71,6 +71,10 @@
                             <worldSourceDirectory>${project.basedir}/src/main/wit/wasi-cli</worldSourceDirectory>
                             <worldName>imports</worldName>
                             <targetPackage>${witCodegen.targetPackage}</targetPackage>
+                            <features>
+                                <!-- Imported by Rust std for wasm32-wasip2 since Rust 1.100 -->
+                                <feature>cli-exit-with-code</feature>
+                            </features>
                         </configuration>
                     </execution>
                 </executions>

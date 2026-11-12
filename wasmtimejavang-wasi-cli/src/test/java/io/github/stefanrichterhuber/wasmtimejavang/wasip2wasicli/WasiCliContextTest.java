@@ -209,6 +209,14 @@ public class WasiCliContextTest {
     }
 
     @Test
+    public void exitWithCodeThrowsProcExitExceptionWithGivenCode() {
+        WasiCliContext cli = newLinkedCli(new WasiIoContext());
+        ProcExitException ex = assertThrows(ProcExitException.class,
+                () -> cli.exitExitWithCode(null, 42));
+        assertEquals(42, ex.getCode());
+    }
+
+    @Test
     public void getStdinRegistersConfiguredStreamWithWasiIo() {
         WasiIoContext io = new WasiIoContext();
         InputStream configuredStdin = new ByteArrayInputStream(new byte[] { 9 });

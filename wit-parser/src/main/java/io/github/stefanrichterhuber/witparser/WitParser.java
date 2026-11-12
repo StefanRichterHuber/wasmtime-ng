@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -84,11 +85,28 @@ public final class WitParser {
      *         declaration order.
      */
     public static List<WitInterface> parse(Path path) {
+        return parse(path, List.of());
+    }
+
+    /**
+     * Like {@link #parse(Path)}, but additionally keeps every item gated behind
+     * one of the given {@code @unstable(feature = ...)} features. Items behind
+     * any other unstable feature are dropped, as if they were never declared.
+     *
+     * @param path     Path to a {@code .wit} file, or a directory containing one
+     *                 WIT package (optionally with a {@code deps/} subdirectory
+     *                 of its dependencies).
+     * @param features The unstable WIT features to enable (e.g.
+     *                 {@code "cli-exit-with-code"}).
+     * @return Every interface declared across all resolved packages, in
+     *         declaration order.
+     */
+    public static List<WitInterface> parse(Path path, Collection<String> features) {
         Path absolute = requireExisting(path);
         if (Files.isDirectory(absolute)) {
-            return run(absolute, absolute, List.of("file", GUEST_DIRECTORY));
+            return run(absolute, absolute, features, List.of("file", GUEST_DIRECTORY));
         }
-        return run(absolute, absolute.getParent(),
+        return run(absolute, absolute.getParent(), features,
                 List.of("file", GUEST_DIRECTORY + "/" + absolute.getFileName()));
     }
 
@@ -107,8 +125,26 @@ public final class WitParser {
      * @return The world's transitively imported interfaces.
      */
     public static List<WitInterface> resolveWorld(Path directory, String worldName) {
+        return resolveWorld(directory, worldName, List.of());
+    }
+
+    /**
+     * Like {@link #resolveWorld(Path, String)}, but additionally keeps every
+     * item gated behind one of the given {@code @unstable(feature = ...)}
+     * features. Items behind any other unstable feature are dropped, as if
+     * they were never declared.
+     *
+     * @param directory Path to the WIT package directory (with an optional
+     *                  {@code deps/} subdirectory of its dependencies).
+     * @param worldName The bare name of the world to resolve (e.g.
+     *                  {@code "command"}).
+     * @param features  The unstable WIT features to enable (e.g.
+     *                  {@code "cli-exit-with-code"}).
+     * @return The world's transitively imported interfaces.
+     */
+    public static List<WitInterface> resolveWorld(Path directory, String worldName, Collection<String> features) {
         Path absolute = requireExisting(directory);
-        return run(absolute, absolute, List.of("world", GUEST_DIRECTORY, worldName));
+        return run(absolute, absolute, features, List.of("world", GUEST_DIRECTORY, worldName));
     }
 
     private static Path requireExisting(Path path) {
@@ -129,15 +165,21 @@ public final class WitParser {
      *
      * @param path          The host path being parsed, only used for error messages.
      * @param hostDirectory The host directory to make visible to the module.
+     * @param features      The unstable WIT features to enable.
      * @param args          The command arguments (without the program name).
      * @return The decoded interfaces.
      */
-    private static List<WitInterface> run(Path path, Path hostDirectory, List<String> args) {
+    private static List<WitInterface> run(Path path, Path hostDirectory, Collection<String> features,
+            List<String> args) {
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         ByteArrayOutputStream stderr = new ByteArrayOutputStream();
 
         List<String> argv = new ArrayList<>();
         argv.add("wit-parser");
+        if (!features.isEmpty()) {
+            argv.add("--features");
+            argv.add(String.join(",", features));
+        }
         argv.addAll(args);
 
         try (WasmtimeStore store = new WasmtimeStore(Module.ENGINE);

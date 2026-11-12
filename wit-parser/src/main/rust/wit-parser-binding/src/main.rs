@@ -274,12 +274,21 @@ fn build_interface(resolve: &Resolve, interface: &Interface) -> anyhow::Result<P
     })
 }
 
+/// Creates a `Resolve` with the given `@unstable(feature = ...)` gates
+/// enabled. Items behind any other unstable feature gate are dropped while
+/// resolving, as if they were never declared.
+fn new_resolve(features: &[String]) -> Resolve {
+    let mut resolve = Resolve::default();
+    resolve.features.extend(features.iter().cloned());
+    resolve
+}
+
 /// Resolves everything at `path` (a single WIT file, or a package directory
 /// with an optional `deps/` subdirectory) and returns every *named*
 /// interface found across all resolved packages -- the default, no-world
 /// behavior.
-fn parse_wit_source(path: &str) -> anyhow::Result<Vec<ParsedInterface>> {
-    let mut resolve = Resolve::default();
+fn parse_wit_source(path: &str, features: &[String]) -> anyhow::Result<Vec<ParsedInterface>> {
+    let mut resolve = new_resolve(features);
     resolve.push_path(Path::new(path))?;
 
     let mut interfaces = Vec::new();
@@ -303,8 +312,12 @@ fn parse_wit_source(path: &str) -> anyhow::Result<Vec<ParsedInterface>> {
 /// sub-packages each define their own world literally named `"imports"`, so
 /// matching by bare name alone across every resolved package (including
 /// dependencies) is ambiguous.
-fn resolve_world_source(dir: &str, world_name: &str) -> anyhow::Result<Vec<ParsedInterface>> {
-    let mut resolve = Resolve::default();
+fn resolve_world_source(
+    dir: &str,
+    world_name: &str,
+    features: &[String],
+) -> anyhow::Result<Vec<ParsedInterface>> {
+    let mut resolve = new_resolve(features);
     let (top_package_id, _) = resolve.push_path(Path::new(dir))?;
 
     let world_ids: Vec<_> = resolve
@@ -339,11 +352,26 @@ fn resolve_world_source(dir: &str, world_name: &str) -> anyhow::Result<Vec<Parse
 }
 
 fn run(args: &[String]) -> anyhow::Result<Vec<ParsedInterface>> {
+    // Optional leading `--features <comma-separated list>`
+    let (features, args): (Vec<String>, &[String]) = match args {
+        [flag, list, rest @ ..] if flag == "--features" => (
+            list.split(',')
+                .map(str::trim)
+                .filter(|f| !f.is_empty())
+                .map(String::from)
+                .collect(),
+            rest,
+        ),
+        _ => (Vec::new(), args),
+    };
     match args {
-        [command, path] if command == "file" => parse_wit_source(path),
-        [command, dir, world_name] if command == "world" => resolve_world_source(dir, world_name),
+        [command, path] if command == "file" => parse_wit_source(path, &features),
+        [command, dir, world_name] if command == "world" => {
+            resolve_world_source(dir, world_name, &features)
+        }
         _ => anyhow::bail!(
-            "usage: wit-parser file <path> | wit-parser world <dir> <world-name>, got {args:?}"
+            "usage: wit-parser [--features <f1,f2,...>] file <path> | \
+             wit-parser [--features <f1,f2,...>] world <dir> <world-name>, got {args:?}"
         ),
     }
 }

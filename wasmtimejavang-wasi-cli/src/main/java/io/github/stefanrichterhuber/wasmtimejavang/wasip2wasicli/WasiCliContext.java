@@ -240,6 +240,12 @@ public class WasiCliContext implements EnvironmentContext, ExitContext, StdinCon
     }
 
     @Override
+    public void exitExitWithCode(WasmtimeComponentInstance instance, int statusCode) {
+        LOGGER.debug("Wasm component called wasi:cli/exit-with-code with code={}", statusCode);
+        throw new ProcExitException(statusCode);
+    }
+
+    @Override
     public WitResource stdinGetStdin(WasmtimeComponentInstance instance) {
         int rep = io.registerInputStream(stdin);
         return WitResource.own("input-stream", rep);

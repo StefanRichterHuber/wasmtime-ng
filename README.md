@@ -461,6 +461,14 @@ To generate from a real, multi-file WIT **world** instead of one interface (a pa
 
 This generates one interface per interface the world's imports flatten to (27 for `wasi:cli`'s `command` world). Exports are intentionally not modeled — `WasmComponentContext` only represents host-provided imports; call an export dynamically via `WasmtimeComponentInstance.invoke(...)` instead.
 
+Items gated behind `@unstable(feature = ...)` are skipped by default. Enable individual features (in either generation mode) with `features`, e.g. for `wasi:cli/exit.exit-with-code`, which Rust's std imports for `wasm32-wasip2` since Rust 1.100:
+
+```xml
+<features>
+    <feature>cli-exit-with-code</feature>
+</features>
+```
+
 **Combining interfaces.** Implementing several generated interfaces on one class (useful when they share state, e.g. two interfaces that both hand out a resource type minted by a shared table — this is exactly what every built-in `Wasi*Context` does) requires overriding `getImportFunctions()`/`getImportResources()`/`getProvidedInterfaces()` to combine each interface's own `default` implementation — Java requires this override whenever two implemented interfaces disagree on a `default` method's body, which any two distinct generated interfaces always do:
 
 ```java
