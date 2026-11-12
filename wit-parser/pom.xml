@@ -48,7 +48,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>3.7.0</version>
                 <executions>
                     <!-- A single wasm32-wasip1 module serves every platform: no cross-compilation
                     (and no per-platform profiles) necessary, the platform specific part is
