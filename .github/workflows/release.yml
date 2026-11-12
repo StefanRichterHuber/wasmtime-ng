@@ -93,7 +93,9 @@ jobs:
         run: rustup target add wasm32-wasip1 wasm32-wasip2 && rustup target add wasm32-wasip1-threads --toolchain nightly
 
       - name: Install cargo cross
-        run: cargo install cross --locked
+        # crates.io cross 0.2.5 (2023) uses images whose MinGW lacks libsynchronization.a, which current Rust std needs for
+        # x86_64-pc-windows-gnu. Git versions use the up-to-date ":main" images.
+        run: cargo install cross --locked --git https://github.com/cross-rs/cross --rev 526d03ddcd2f70e683074b3ea6f75ed300f33132
 
       - name: Install wasm-opt (binaryen)
         run: |
