@@ -1,19 +1,20 @@
 {
     "java.configuration.updateBuildConfiguration": "automatic",
     "rust-analyzer.linkedProjects": [
-        "./src/main/rust/wasmtime-binding/Cargo.toml",
-        "./src/test/rust/wasip1test/Cargo.toml",
-        "./src/test/rust/valuetest/Cargo.toml",
-        "./src/test/rust/wasip1filetest/Cargo.toml",
-        "./src/test/rust/wasip1sockettest/Cargo.toml",
-        "./src/test/rust/wasip1threadtest/Cargo.toml",
-        "./src/test/rust/wasip1vfstest/Cargo.toml",
-        "./src/test/rust/wasip2customtest/Cargo.toml",
-        "./src/test/rust/wasip2clitest/Cargo.toml",
-        "./src/test/rust/wasip2filetest/Cargo.toml",
-        "./src/test/rust/wasip2randomtest/Cargo.toml",
-        "./src/test/rust/wasip2sockettest/Cargo.toml",
-        "./src/test/rust/wasip2test/Cargo.toml",
-        "./src/test/rust/wasip1threadtest/Cargo.toml"
+        "./wasmtimejavang/src/main/rust/wasmtime-binding/Cargo.toml",
+        "./wasmtimejavang/src/test/rust/valuetest/Cargo.toml",
+        "./wasmtimejavang/src/test/rust/wasip1filetest/Cargo.toml",
+        "./wasmtimejavang/src/test/rust/wasip1sockettest/Cargo.toml",
+        "./wasmtimejavang/src/test/rust/wasip1test/Cargo.toml",
+        "./wasmtimejavang/src/test/rust/wasip1threadtest/Cargo.toml",
+        "./wasmtimejavang/src/test/rust/wasip1vfstest/Cargo.toml",
+        "./wasmtimejavang-wasi-cli/src/test/rust/wasip2clitest/Cargo.toml",
+        "./wasmtimejavang-wasi-cli/src/test/rust/wasip2customtest/Cargo.toml",
+        "./wasmtimejavang-wasi-cli/src/test/rust/wasip2test/Cargo.toml",
+        "./wasmtimejavang-wasi-filesystem/src/test/rust/wasip2filetest/Cargo.toml",
+        "./wasmtimejavang-wasi-http/src/test/rust/wasip2httptest/Cargo.toml",
+        "./wasmtimejavang-wasi-random/src/test/rust/wasip2randomtest/Cargo.toml",
+        "./wasmtimejavang-wasi-sockets/src/test/rust/wasip2sockettest/Cargo.toml",
+        "./wit-parser/src/main/rust/wit-parser-binding/Cargo.toml"
     ]
 }
