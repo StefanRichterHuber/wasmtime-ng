@@ -13,7 +13,7 @@ name = "wasmtimebinding"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasmtime = { version = "49.0.3" }
+wasmtime = { version = "50.0.0" }
 jni = { version = "0.22" }
 log = { version = "0.4.34", features = ["std"] }
 
