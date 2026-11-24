@@ -79,13 +79,18 @@ impl JWasmtimeSharedMemoryNativeInterface for JWasmtimeSharedMemoryAPI {
         max_pages: ::jni::sys::jlong,
     ) -> ::std::result::Result<::jni::sys::jlong, Self::Error> {
         let engine = unsafe { engine.as_ref() };
-        let ty = MemoryType::shared(initial_pages as u32, max_pages as u32);
-        match SharedMemory::new(engine, ty) {
-            Ok(shared_memory) => {
-                let result = SharedMemoryHandle::new(shared_memory);
-                debug!("Created SharedMemory");
-                Ok(result.into())
-            }
+        match MemoryType::shared(initial_pages as u32, max_pages as u32) {
+            Ok(ty) => match SharedMemory::new(engine, ty) {
+                Ok(shared_memory) => {
+                    let result = SharedMemoryHandle::new(shared_memory);
+                    debug!("Created SharedMemory");
+                    Ok(result.into())
+                }
+                Err(e) => {
+                    handle_wasmtime_error(_env, e)?;
+                    Err(jni::errors::Error::JavaException)
+                }
+            },
             Err(e) => {
                 handle_wasmtime_error(_env, e)?;
                 Err(jni::errors::Error::JavaException)
